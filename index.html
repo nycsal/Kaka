@@ -63,11 +63,13 @@
       height: 30,
       color: "#00f",
       moving: false,
-      fireDelay: 0
+      fireDelay: 0,
+      hits: 0
     };
 
     let bullets = [];
     let obstacles = [];
+    let explosions = [];
     let score = 0, level = 1, timeLeft = 30, missed = 0;
     let intervalId = null;
     let totalSpawned = 0;
@@ -89,6 +91,13 @@
       ctx.fillRect(o.x, o.y, o.w, o.h);
     }
 
+    function drawExplosion(e) {
+      ctx.fillStyle = "orange";
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     function spawnObstacle() {
       if (totalSpawned >= 110) return;
       let x = Math.random() * (cw - 30);
@@ -102,7 +111,7 @@
       drawPlayer();
 
       bullets.forEach((b, i) => {
-        b.y -= 10;
+        b.y -= 15;
         drawBullet(b);
         if (b.y < 0) bullets.splice(i, 1);
       });
@@ -127,12 +136,20 @@
             bullets.splice(bi, 1);
             obstacles.splice(oi, 1);
             score += 10;
+            player.hits += 1;
+            explosions.push({ x: o.x + 15, y: o.y + 15, r: 1, max: 15 });
             updateUI();
           }
         });
       });
 
-      if (Math.random() < 0.05) spawnObstacle();
+      explosions.forEach((e, i) => {
+        drawExplosion(e);
+        e.r += 2;
+        if (e.r >= e.max) explosions.splice(i, 1);
+      });
+
+      if (Math.random() < 0.06) spawnObstacle();
     }
 
     function updateUI() {
@@ -170,12 +187,10 @@
     intervalId = setInterval(gameLoop, 1000 / 60);
     setInterval(updateTimer, 1000);
 
-    let touchStartX = null;
-
     canvas.addEventListener("touchstart", e => {
       e.preventDefault();
       const touch = e.touches[0];
-      touchStartX = touch.clientX;
+      player.x = touch.clientX;
       player.moving = true;
     });
 
@@ -191,15 +206,28 @@
       player.moving = false;
     });
 
-    // Continuous fire
+    // Continuous fire with upgrades
     setInterval(() => {
+      let firePower = 1;
+      if (player.hits >= 15) firePower = 3;
+      else if (player.hits >= 5) firePower = 2;
+
       if (player.fireDelay <= 0) {
-        bullets.push({ x: player.x, y: player.y });
-        player.fireDelay = 5;
+        if (firePower === 1) {
+          bullets.push({ x: player.x, y: player.y });
+        } else if (firePower === 2) {
+          bullets.push({ x: player.x - 10, y: player.y });
+          bullets.push({ x: player.x + 10, y: player.y });
+        } else if (firePower === 3) {
+          bullets.push({ x: player.x - 15, y: player.y });
+          bullets.push({ x: player.x, y: player.y });
+          bullets.push({ x: player.x + 15, y: player.y });
+        }
+        player.fireDelay = 2;
       } else {
         player.fireDelay--;
       }
-    }, 100);
+    }, 50);
   </script>
 </body>
 </html>
