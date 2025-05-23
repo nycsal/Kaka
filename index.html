@@ -2,232 +2,174 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KaKaReza Shooting Game</title>
   <style>
-    body {
-      margin: 0;
-      background: black;
-      overflow: hidden;
-      touch-action: none;
-    }
-    canvas {
-      display: block;
-      background: linear-gradient(to bottom, #222, #000);
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: black; color: white; font-family: sans-serif; overflow: hidden; }
     #scoreboard {
       position: absolute;
       top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.7);
-      padding: 12px 20px;
-      color: white;
-      font-family: sans-serif;
-      font-size: 18px;
-      border: 2px solid #fff;
-      border-radius: 8px;
+      right: 10px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid white;
+      padding: 10px;
       text-align: center;
+      border-radius: 10px;
     }
-    #scoreboard h1 {
-      margin: 0 0 5px 0;
-      font-size: 20px;
-      color: #ffcc00;
+    #scoreboard h2 {
+      margin-bottom: 5px;
+      font-size: 16px;
     }
+    canvas { display: block; margin: 0 auto; background: #000; }
   </style>
 </head>
 <body>
   <div id="scoreboard">
-    <h1>KaKaReza Shooting Game</h1>
-    <div id="score">Score: 0</div>
-    <div id="level">Level: 1</div>
-    <div id="time">Time: 30</div>
-    <div id="missed">Missed: 0 / 10</div>
+    <h2>KaKaReza Shooting Game</h2>
+    <div>Score: <span id="score">0</span></div>
+    <div>Time: <span id="timer">60</span>s</div>
   </div>
-  <canvas id="game"></canvas>
-  <script>
-    const canvas = document.getElementById("game");
-    const ctx = canvas.getContext("2d");
-    let cw, ch;
-    function resizeCanvas() {
-      cw = canvas.width = window.innerWidth;
-      ch = canvas.height = window.innerHeight;
-    }
-    window.addEventListener("resize", resizeCanvas);
-    resizeCanvas();
+  <canvas id="gameCanvas"></canvas>
 
-    let player = {
-      x: cw / 2,
-      y: ch - 100,
-      width: 80,
-      height: 30,
-      color: "#00f",
-      moving: false,
-      fireDelay: 0,
-      hits: 0
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const player = {
+      x: canvas.width / 2,
+      y: canvas.height - 60,
+      width: 40,
+      height: 40,
+      color: "cyan",
+      speed: 10
     };
 
-    let bullets = [];
-    let obstacles = [];
-    let explosions = [];
-    let score = 0, level = 1, timeLeft = 30, missed = 0;
-    let intervalId = null;
-    let totalSpawned = 0;
+    const bullets = [];
+    const obstacles = [];
+    let score = 0;
+    let timeLeft = 60;
+    let gameInterval, timerInterval;
 
     function drawPlayer() {
       ctx.fillStyle = player.color;
-      ctx.fillRect(player.x - player.width / 2, player.y, player.width, player.height);
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(player.x - 5, player.y - 10, 10, 10); // nozzle
-    }
-
-    function drawBullet(b) {
-      ctx.fillStyle = "red";
-      ctx.fillRect(b.x - 2, b.y, 4, 10);
-    }
-
-    function drawObstacle(o) {
-      ctx.fillStyle = o.color;
-      ctx.fillRect(o.x, o.y, o.w, o.h);
-    }
-
-    function drawExplosion(e) {
-      ctx.fillStyle = "orange";
       ctx.beginPath();
-      ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+      ctx.moveTo(player.x, player.y);
+      ctx.lineTo(player.x - 20, player.y + 40);
+      ctx.lineTo(player.x + 20, player.y + 40);
+      ctx.closePath();
       ctx.fill();
     }
 
+    function drawBullets() {
+      ctx.fillStyle = "yellow";
+      bullets.forEach(bullet => {
+        ctx.fillRect(bullet.x, bullet.y, 4, 10);
+      });
+    }
+
+    function drawObstacles() {
+      obstacles.forEach(ob => {
+        ctx.fillStyle = ob.color;
+        ctx.fillRect(ob.x, ob.y, ob.size, ob.size);
+      });
+    }
+
+    function moveBullets() {
+      bullets.forEach(b => b.y -= 8);
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        if (bullets[i].y < 0) bullets.splice(i, 1);
+      }
+    }
+
     function spawnObstacle() {
-      if (totalSpawned >= 110) return;
-      let x = Math.random() * (cw - 30);
-      let color = ["#0f0", "#f0f", "#0ff", "#fff", "#ff0"][Math.floor(Math.random() * 5)];
-      obstacles.push({ x: x, y: -30, w: 30, h: 30, color: color });
-      totalSpawned++;
+      const size = 20 + Math.random() * 20;
+      obstacles.push({
+        x: Math.random() * (canvas.width - size),
+        y: -size,
+        size: size,
+        color: `hsl(${Math.random() * 360}, 70%, 50%)`
+      });
+    }
+
+    function moveObstacles() {
+      obstacles.forEach(ob => ob.y += 4);
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        if (obstacles[i].y > canvas.height) obstacles.splice(i, 1);
+      }
+    }
+
+    function checkCollisions() {
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        for (let j = bullets.length - 1; j >= 0; j--) {
+          const ob = obstacles[i];
+          const b = bullets[j];
+          if (
+            b.x < ob.x + ob.size &&
+            b.x + 4 > ob.x &&
+            b.y < ob.y + ob.size &&
+            b.y + 10 > ob.y
+          ) {
+            bullets.splice(j, 1);
+            obstacles.splice(i, 1);
+            score++;
+            document.getElementById("score").textContent = score;
+            break;
+          }
+        }
+      }
     }
 
     function gameLoop() {
-      ctx.clearRect(0, 0, cw, ch);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawPlayer();
+      drawBullets();
+      drawObstacles();
+      moveBullets();
+      moveObstacles();
+      checkCollisions();
+    }
 
-      bullets.forEach((b, i) => {
-        b.y -= 15;
-        drawBullet(b);
-        if (b.y < 0) bullets.splice(i, 1);
-      });
-
-      obstacles.forEach((o, i) => {
-        o.y += 3 + level;
-        drawObstacle(o);
-        if (o.y > ch) {
-          obstacles.splice(i, 1);
-          missed++;
-          updateUI();
-          if (missed >= 10) gameOver();
+    function startGame() {
+      gameInterval = setInterval(gameLoop, 1000 / 60);
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        document.getElementById("timer").textContent = timeLeft;
+        if (timeLeft <= 0) {
+          clearInterval(gameInterval);
+          clearInterval(timerInterval);
+          alert("Game Over! Your score: " + score);
         }
-      });
-
-      bullets.forEach((b, bi) => {
-        obstacles.forEach((o, oi) => {
-          if (
-            b.x > o.x && b.x < o.x + o.w &&
-            b.y < o.y + o.h && b.y + 10 > o.y
-          ) {
-            bullets.splice(bi, 1);
-            obstacles.splice(oi, 1);
-            score += 10;
-            player.hits += 1;
-            explosions.push({ x: o.x + 15, y: o.y + 15, r: 1, max: 15 });
-            updateUI();
-          }
-        });
-      });
-
-      explosions.forEach((e, i) => {
-        drawExplosion(e);
-        e.r += 2;
-        if (e.r >= e.max) explosions.splice(i, 1);
-      });
-
-      if (Math.random() < 0.06) spawnObstacle();
+      }, 1000);
+      setInterval(spawnObstacle, 800);
     }
 
-    function updateUI() {
-      document.getElementById("score").textContent = "Score: " + score;
-      document.getElementById("level").textContent = "Level: " + level;
-      document.getElementById("missed").textContent = "Missed: " + missed + " / 10";
-    }
+    let moving = false;
 
-    function gameOver() {
-      clearInterval(intervalId);
-      alert("Game Over! Your score: " + score);
-      location.reload();
-    }
-
-    function nextLevel() {
-      level++;
-      if (level > 4) {
-        clearInterval(intervalId);
-        alert("You Win! Final score: " + score);
-        location.reload();
+    canvas.addEventListener("touchstart", (e) => {
+      const touchX = e.touches[0].clientX;
+      const touchY = e.touches[0].clientY;
+      if (touchY > canvas.height * 0.8) {
+        moving = true;
+        player.x = touchX;
       } else {
-        timeLeft = 30;
-        totalSpawned = 0;
-        obstacles = [];
-        bullets = [];
+        bullets.push({ x: player.x, y: player.y });
       }
-    }
-
-    function updateTimer() {
-      timeLeft--;
-      document.getElementById("time").textContent = "Time: " + timeLeft;
-      if (timeLeft <= 0) nextLevel();
-    }
-
-    intervalId = setInterval(gameLoop, 1000 / 60);
-    setInterval(updateTimer, 1000);
-
-    canvas.addEventListener("touchstart", e => {
-      e.preventDefault();
-      const touch = e.touches[0];
-      player.x = touch.clientX;
-      player.moving = true;
     });
 
-    canvas.addEventListener("touchmove", e => {
-      e.preventDefault();
-      if (!player.moving) return;
-      const touch = e.touches[0];
-      player.x = touch.clientX;
-    });
-
-    canvas.addEventListener("touchend", e => {
-      e.preventDefault();
-      player.moving = false;
-    });
-
-    // Continuous fire with upgrades
-    setInterval(() => {
-      let firePower = 1;
-      if (player.hits >= 15) firePower = 3;
-      else if (player.hits >= 5) firePower = 2;
-
-      if (player.fireDelay <= 0) {
-        if (firePower === 1) {
-          bullets.push({ x: player.x, y: player.y });
-        } else if (firePower === 2) {
-          bullets.push({ x: player.x - 10, y: player.y });
-          bullets.push({ x: player.x + 10, y: player.y });
-        } else if (firePower === 3) {
-          bullets.push({ x: player.x - 15, y: player.y });
-          bullets.push({ x: player.x, y: player.y });
-          bullets.push({ x: player.x + 15, y: player.y });
-        }
-        player.fireDelay = 2;
-      } else {
-        player.fireDelay--;
+    canvas.addEventListener("touchmove", (e) => {
+      if (moving) {
+        player.x = e.touches[0].clientX;
       }
-    }, 50);
+    });
+
+    canvas.addEventListener("touchend", () => {
+      moving = false;
+    });
+
+    startGame();
   </script>
 </body>
 </html>
