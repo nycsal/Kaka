@@ -1,42 +1,82 @@
-
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>KaKaReza Shooting Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <style>
-    body { margin: 0; background: black; overflow: hidden; color: white; font-family: sans-serif; }
-    canvas { display: block; background: #111; margin: auto; }
+    html, body {
+      margin: 0; padding: 0; overflow: hidden;
+      background: black;
+      color: white;
+      font-family: sans-serif;
+      height: 100%;
+      touch-action: none;
+    }
+    canvas {
+      display: block;
+      background: #111;
+      width: 100vw;
+      height: 100vh;
+    }
   </style>
 </head>
 <body>
-  <canvas id="gameCanvas" width="480" height="640"></canvas>
+  <canvas id="gameCanvas"></canvas>
   <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    // Game scale based on canvas size
+    let scaleX, scaleY;
+
+    function updateScale() {
+      scaleX = canvas.width / 400;  // design width 400 units
+      scaleY = canvas.height / 600; // design height 600 units
+    }
+    updateScale();
+
+    window.addEventListener('resize', () => {
+      resizeCanvas();
+      updateScale();
+    });
+
+    // Game variables scaled by design units
+    let carWidth = 40;
+    let carHeight = 20;
+    let carX = canvas.width / 2 - carWidth * scaleX / 2;
+    let carY = canvas.height - carHeight * scaleY - 20 * scaleY;
+
     let score = 0;
     let timer = 60;
-    let carX = canvas.width / 2 - 20;
+
     const bullets = [];
     const enemies = [];
 
     function drawCar() {
       ctx.fillStyle = 'white';
-      ctx.fillRect(carX, canvas.height - 40, 40, 20);
+      ctx.fillRect(carX, carY, carWidth * scaleX, carHeight * scaleY);
     }
 
     function drawBullets() {
       ctx.fillStyle = 'red';
-      for (let b of bullets) {
-        ctx.fillRect(b.x, b.y, 5, 10);
-      }
+      bullets.forEach(b => {
+        ctx.fillRect(b.x, b.y, 5 * scaleX, 10 * scaleY);
+      });
     }
 
     function drawEnemies() {
       ctx.fillStyle = 'green';
-      for (let e of enemies) {
-        ctx.fillRect(e.x, e.y, 30, 30);
-      }
+      enemies.forEach(e => {
+        ctx.fillRect(e.x, e.y, 30 * scaleX, 30 * scaleY);
+      });
     }
 
     function update() {
@@ -45,14 +85,29 @@
       drawBullets();
       drawEnemies();
 
-      for (let b of bullets) b.y -= 5;
-      for (let e of enemies) e.y += 2;
+      // Move bullets up
+      for (let i = bullets.length -1; i >= 0; i--) {
+        bullets[i].y -= 7 * scaleY;
+        if (bullets[i].y + 10 * scaleY < 0) bullets.splice(i, 1);
+      }
+
+      // Move enemies down
+      for (let i = enemies.length -1; i >= 0; i--) {
+        enemies[i].y += 3 * scaleY;
+        if (enemies[i].y > canvas.height) enemies.splice(i,1);
+      }
 
       // Collision detection
       for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
         for (let j = bullets.length - 1; j >= 0; j--) {
-          const e = enemies[i], b = bullets[j];
-          if (b.x < e.x + 30 && b.x + 5 > e.x && b.y < e.y + 30 && b.y + 10 > e.y) {
+          const b = bullets[j];
+          if (
+            b.x < e.x + 30 * scaleX &&
+            b.x + 5 * scaleX > e.x &&
+            b.y < e.y + 30 * scaleY &&
+            b.y + 10 * scaleY > e.y
+          ) {
             enemies.splice(i, 1);
             bullets.splice(j, 1);
             score += 10;
@@ -61,40 +116,67 @@
         }
       }
 
-      ctx.fillText('Score: ' + score, 10, 20);
-      ctx.fillText('Time: ' + timer, canvas.width - 80, 20);
+      // Draw score and timer
+      ctx.fillStyle = 'white';
+      ctx.font = `${16 * scaleX}px sans-serif`;
+      ctx.fillText('Score: ' + score, 10 * scaleX, 25 * scaleY);
+      ctx.fillText('Time: ' + timer, canvas.width - 100 * scaleX, 25 * scaleY);
     }
 
     function spawnEnemy() {
-      enemies.push({ x: Math.random() * (canvas.width - 30), y: -30 });
+      enemies.push({
+        x: Math.random() * (canvas.width - 30 * scaleX),
+        y: -30 * scaleY,
+      });
     }
 
     setInterval(update, 1000 / 60);
     setInterval(spawnEnemy, 1000);
     setInterval(() => {
       timer--;
-      if (timer <= 0) alert("Time's up! Score: " + score);
+      if (timer <= 0) {
+        alert("Time’s up! Score: " + score);
+        timer = 60;
+        score = 0;
+        enemies.length = 0;
+        bullets.length = 0;
+      }
     }, 1000);
 
-    // Touch controls
     canvas.addEventListener('touchmove', (e) => {
       const touch = e.touches[0];
-      if (touch.clientY > canvas.height - 100) {
-        carX = touch.clientX - 20;
+      if (touch.clientY > canvas.height - 100 * scaleY) {
+        carX = touch.clientX - (carWidth * scaleX) / 2;
+        // Clamp car position inside canvas
+        carX = Math.min(Math.max(carX, 0), canvas.width - carWidth * scaleX);
       }
-    });
+      e.preventDefault();
+    }, { passive: false });
 
     canvas.addEventListener('touchstart', (e) => {
-      if (e.touches[0].clientY < canvas.height - 100) {
-        bullets.push({ x: carX + 17, y: canvas.height - 40 });
+      if (e.touches[0].clientY < canvas.height - 100 * scaleY) {
+        bullets.push({
+          x: carX + (carWidth * scaleX) / 2 - (5 * scaleX) / 2,
+          y: carY,
+        });
       }
-    });
+      e.preventDefault();
+    }, { passive: false });
 
-    // Desktop fallback
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowLeft') carX -= 10;
-      if (e.key === 'ArrowRight') carX += 10;
-      if (e.key === ' ') bullets.push({ x: carX + 17, y: canvas.height - 40 });
+      const step = 10 * scaleX;
+      if (e.key === 'ArrowLeft') {
+        carX = Math.max(carX - step, 0);
+      }
+      if (e.key === 'ArrowRight') {
+        carX = Math.min(carX + step, canvas.width - carWidth * scaleX);
+      }
+      if (e.key === ' ') {
+        bullets.push({
+          x: carX + (carWidth * scaleX) / 2 - (5 * scaleX) / 2,
+          y: carY,
+        });
+      }
     });
   </script>
 </body>
