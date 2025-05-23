@@ -1,232 +1,211 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KaKaReza Shooting Game</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <style>
-    html, body {
+    body {
       margin: 0;
-      padding: 0;
       overflow: hidden;
-      background: black;
-      touch-action: none;
-      user-select: none;
+      background-color: black;
+      font-family: Arial, sans-serif;
     }
     #scoreboard {
       position: absolute;
       top: 10px;
       left: 10px;
+      width: 120px;
+      background: #222;
       color: white;
-      font-size: 16px;
-      font-family: Arial, sans-serif;
-      background-color: rgba(0, 0, 0, 0.5);
-      padding: 8px;
-      border-radius: 8px;
+      padding: 10px;
+      border-radius: 10px;
+      font-size: 14px;
+      line-height: 1.5;
     }
-    #title {
-      position: absolute;
-      top: 60px;
-      left: 10px;
-      color: #ffd700;
-      font-family: fantasy;
-      font-size: 20px;
+    #gameTitle {
+      text-align: center;
+      font-size: 14px;
+      color: #ccc;
+      margin-top: 10px;
     }
   </style>
 </head>
 <body>
-<canvas id="gameCanvas"></canvas>
-<div id="scoreboard">Score: 0 | Level: 1 | Time: 30</div>
-<div id="title">KaKaReza Shooting Game</div>
+  <canvas id="gameCanvas"></canvas>
+  <div id="scoreboard">
+    <div>Score: <span id="score">0</span></div>
+    <div>Missed: <span id="missed">0</span>/10</div>
+    <div>Level: <span id="level">1</span>/4</div>
+    <div>Time: <span id="timer">30</span>s</div>
+    <div id="gameTitle">KaKaReza Shooting Game</div>
+  </div>
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+    canvas.width = width;
+    canvas.height = height;
 
-<script>
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
+    let player = {
+      x: width / 2,
+      y: height - 80,
+      width: 40,
+      height: 40,
+      speed: 10,
+      color: "cyan",
+    };
 
-let cw = window.innerWidth;
-let ch = window.innerHeight;
-canvas.width = cw;
-canvas.height = ch;
+    let bullets = [];
+    let obstacles = [];
+    let score = 0;
+    let missed = 0;
+    let level = 1;
+    let levelTime = 30;
+    let frame = 0;
+    let totalObstacles = 0;
 
-let player = { x: cw / 2, y: ch - 60, width: 50, height: 30, speed: 10, color: "lime" };
-let bullets = [];
-let obstacles = [];
-let score = 0;
-let level = 1;
-let time = 30;
-let missed = 0;
-let maxMiss = 9;
-let totalObstacles = 0;
-let fireRate = 150;
-let firing = false;
-let fireInterval;
+    const maxObstacles = 110;
+    const allowedMisses = 10;
+    const totalLevels = 4;
 
-function spawnObstacle() {
-  const size = 30;
-  const x = Math.random() * (cw - size);
-  const colors = ["red", "orange", "cyan", "magenta"];
-  const color = colors[Math.floor(Math.random() * colors.length)];
-  obstacles.push({ x, y: -size, size, color });
-  totalObstacles++;
-}
-
-function drawPlayer() {
-  ctx.fillStyle = player.color;
-  ctx.beginPath();
-  ctx.moveTo(player.x, player.y);
-  ctx.lineTo(player.x - 15, player.y + player.height);
-  ctx.lineTo(player.x + 15, player.y + player.height);
-  ctx.closePath();
-  ctx.fill();
-}
-
-function drawBullets() {
-  ctx.fillStyle = "yellow";
-  bullets.forEach(b => ctx.fillRect(b.x - 2, b.y, 4, 10));
-}
-
-function drawObstacles() {
-  obstacles.forEach(o => {
-    ctx.fillStyle = o.color;
-    ctx.fillRect(o.x, o.y, o.size, o.size);
-  });
-}
-
-function updateBullets() {
-  bullets.forEach(b => b.y -= 10);
-  bullets = bullets.filter(b => b.y > -20);
-}
-
-function updateObstacles() {
-  obstacles.forEach(o => o.y += 3 + level);
-  obstacles = obstacles.filter(o => {
-    if (o.y > ch) {
-      missed++;
-      return false;
+    function drawPlayer() {
+      ctx.fillStyle = player.color;
+      ctx.beginPath();
+      ctx.moveTo(player.x, player.y);
+      ctx.lineTo(player.x - 15, player.y + 40);
+      ctx.lineTo(player.x + 15, player.y + 40);
+      ctx.closePath();
+      ctx.fill();
     }
-    return true;
-  });
-}
 
-function checkCollisions() {
-  bullets.forEach((b, bi) => {
-    obstacles.forEach((o, oi) => {
-      if (b.x > o.x && b.x < o.x + o.size && b.y < o.y + o.size && b.y > o.y) {
-        bullets.splice(bi, 1);
-        obstacles.splice(oi, 1);
-        score++;
+    function drawBullets() {
+      ctx.fillStyle = "yellow";
+      bullets.forEach((b) => {
+        ctx.fillRect(b.x - 2, b.y, 4, 10);
+        b.y -= 10;
+      });
+      bullets = bullets.filter((b) => b.y > 0);
+    }
 
-        // Power-up colors
-        if (o.color === "cyan") fireRate = 100;
-        if (o.color === "magenta") fireRate = 60;
+    function drawObstacles() {
+      ctx.fillStyle = "red";
+      obstacles.forEach((o) => {
+        ctx.fillRect(o.x, o.y, o.size, o.size);
+        o.y += o.speed;
+      });
+      obstacles = obstacles.filter((o) => {
+        if (o.y > height) {
+          missed++;
+          updateScoreboard();
+          return false;
+        }
+        return true;
+      });
+    }
+
+    function detectCollisions() {
+      bullets.forEach((b, bi) => {
+        obstacles.forEach((o, oi) => {
+          if (
+            b.x > o.x &&
+            b.x < o.x + o.size &&
+            b.y > o.y &&
+            b.y < o.y + o.size
+          ) {
+            bullets.splice(bi, 1);
+            obstacles.splice(oi, 1);
+            score++;
+            updateScoreboard();
+          }
+        });
+      });
+    }
+
+    function updateScoreboard() {
+      document.getElementById("score").textContent = score;
+      document.getElementById("missed").textContent = missed;
+      document.getElementById("level").textContent = level;
+    }
+
+    function spawnObstacle() {
+      if (totalObstacles < maxObstacles) {
+        const size = 30;
+        const x = Math.random() * (width - size);
+        const speed = 2 + level * 0.5;
+        obstacles.push({ x, y: 0, size, speed });
+        totalObstacles++;
       }
-    });
-  });
-}
-
-function drawScoreboard() {
-  document.getElementById("scoreboard").innerText = `Score: ${score} | Level: ${level} | Time: ${time}`;
-}
-
-function shootBullet() {
-  bullets.push({ x: player.x, y: player.y });
-}
-
-function startFiring() {
-  if (!firing) {
-    firing = true;
-    shootBullet();
-    fireInterval = setInterval(shootBullet, fireRate);
-  }
-}
-
-function stopFiring() {
-  firing = false;
-  clearInterval(fireInterval);
-}
-
-function levelUp() {
-  if (level < 4) {
-    level++;
-    time = 30;
-    fireRate = 150;
-    totalObstacles = 0;
-  } else {
-    alert("Congratulations! You won!");
-    resetGame();
-  }
-}
-
-function resetGame() {
-  score = 0;
-  level = 1;
-  time = 30;
-  missed = 0;
-  fireRate = 150;
-  bullets = [];
-  obstacles = [];
-  totalObstacles = 0;
-}
-
-function gameLoop() {
-  ctx.clearRect(0, 0, cw, ch);
-  drawPlayer();
-  drawBullets();
-  drawObstacles();
-  drawScoreboard();
-  updateBullets();
-  updateObstacles();
-  checkCollisions();
-
-  if (missed > maxMiss) {
-    alert("Game Over. You missed too many!");
-    resetGame();
-  }
-
-  if (totalObstacles < 110) {
-    if (Math.random() < 0.05) spawnObstacle();
-  } else if (score >= 100) {
-    levelUp();
-  }
-
-  requestAnimationFrame(gameLoop);
-}
-
-setInterval(() => {
-  time--;
-  if (time <= 0) {
-    if (score >= 100) {
-      levelUp();
-    } else {
-      alert("Time's up! Game Over.");
-      resetGame();
     }
-  }
-}, 1000);
 
-// Touch Controls
-canvas.addEventListener("touchstart", e => {
-  const touch = e.touches[0];
-  const y = touch.clientY;
-  if (y > ch * 0.75) {
-    player.x = touch.clientX;
-  } else {
-    startFiring();
-  }
-});
+    function gameOver(msg) {
+      alert(msg);
+      location.reload();
+    }
 
-canvas.addEventListener("touchmove", e => {
-  const touch = e.touches[0];
-  const y = touch.clientY;
-  if (y > ch * 0.75) {
-    player.x = touch.clientX;
-  }
-});
+    function nextLevel() {
+      if (level >= totalLevels) {
+        gameOver("You win! Final Score: " + score);
+      } else {
+        level++;
+        levelTime = 30;
+        totalObstacles = 0;
+        obstacles = [];
+        bullets = [];
+        missed = 0;
+        updateScoreboard();
+      }
+    }
 
-canvas.addEventListener("touchend", e => {
-  stopFiring();
-});
+    function gameLoop() {
+      ctx.clearRect(0, 0, width, height);
+      drawPlayer();
+      drawBullets();
+      drawObstacles();
+      detectCollisions();
 
-gameLoop();
-</script>
+      if (frame % 15 === 0) spawnObstacle();
+      frame++;
+      if (missed >= allowedMisses) gameOver("Game Over. Too many missed!");
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    setInterval(() => {
+      levelTime--;
+      document.getElementById("timer").textContent = levelTime;
+      if (levelTime <= 0) {
+        nextLevel();
+      }
+    }, 1000);
+
+    // Touch Controls
+    let isTouching = false;
+    let touchX = 0;
+
+    canvas.addEventListener("touchstart", (e) => {
+      const touch = e.touches[0];
+      touchX = touch.clientX;
+      isTouching = true;
+      bullets.push({ x: player.x, y: player.y });
+    });
+
+    canvas.addEventListener("touchmove", (e) => {
+      if (!isTouching) return;
+      const touch = e.touches[0];
+      const dx = touch.clientX - touchX;
+      player.x += dx;
+      player.x = Math.max(20, Math.min(player.x, width - 20));
+      touchX = touch.clientX;
+    });
+
+    canvas.addEventListener("touchend", () => {
+      isTouching = false;
+    });
+
+    updateScoreboard();
+    gameLoop();
+  </script>
 </body>
 </html>
