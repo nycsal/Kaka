@@ -245,6 +245,12 @@ function activatePower() {
   }, 8000);
 }
 
+// Random bright colors for special enemies
+function getRandomColor() {
+  const colors = ['#ff00ff', '#00ffff', '#ffff00', '#ff5500', '#00ff88'];
+  return colors[Math.floor(Math.random() * colors.length)];
+}
+
 // Touch controls with drag on car and tap to shoot anywhere else
 canvas.addEventListener('touchstart', e => {
   for (let touch of e.changedTouches) {
@@ -270,4 +276,86 @@ canvas.addEventListener('touchmove', e => {
       let newX = touch.clientX - car.dragOffsetX;
       // clamp inside screen
       if (newX < 0) newX = 0;
-      if (newX
+      if (newX + car.w > W()) newX = W() - car.w;
+      car.x = newX;
+    }
+  }
+  e.preventDefault();
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  for (let touch of e.changedTouches) {
+    if (touch.identifier === touchIdForCar) {
+      car.dragging = false;
+      car.opacity = 1;
+      touchIdForCar = null;
+    }
+  }
+  e.preventDefault();
+}, { passive: false });
+
+// Optional: mouse controls for desktop testing
+canvas.addEventListener('mousedown', e => {
+  const mx = e.clientX;
+  const my = e.clientY;
+  if (mx >= car.x && mx <= car.x + car.w && my >= car.y && my <= car.y + car.h) {
+    car.dragging = true;
+    car.dragOffsetX = mx - car.x;
+    car.opacity = 0.7;
+  } else {
+    shootBullet();
+  }
+});
+canvas.addEventListener('mousemove', e => {
+  if (car.dragging) {
+    let newX = e.clientX - car.dragOffsetX;
+    if (newX < 0) newX = 0;
+    if (newX + car.w > W()) newX = W() - car.w;
+    car.x = newX;
+  }
+});
+canvas.addEventListener('mouseup', e => {
+  if (car.dragging) {
+    car.dragging = false;
+    car.opacity = 1;
+  }
+});
+
+// Game loop and timer
+let spawnInterval = setInterval(spawnEnemy, 1100);
+let timerInterval = setInterval(() => {
+  timer--;
+  if (timer <= 0) {
+    clearInterval(timerInterval);
+    clearInterval(spawnInterval);
+    alert("Game Over! Your score: " + score);
+    // reset game (optional)
+    score = 0;
+    timer = 60;
+    bullets = [];
+    enemies = [];
+    specialEnemies = [];
+    updateScoreboard();
+    spawnInterval = setInterval(spawnEnemy, 1100);
+    timerInterval = setInterval(() => {
+      timer--;
+      if (timer <= 0) {
+        clearInterval(timerInterval);
+        clearInterval(spawnInterval);
+        alert("Game Over! Your score: " + score);
+      }
+      updateScoreboard();
+    }, 1000);
+  }
+  updateScoreboard();
+}, 1000);
+
+function gameLoop() {
+  update();
+  requestAnimationFrame(gameLoop);
+}
+gameLoop();
+</script>
+
+</body>
+</html>
