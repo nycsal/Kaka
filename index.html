@@ -10,15 +10,15 @@
     #scoreboard {
       position: fixed; top: 0; left: 0;
       width: 200px; height: 100vh;
-      background: rgba(0, 0, 0, 0.85);
-      color: #0f0; padding: 20px;
-      user-select: none;
+      background: rgba(0,0,0,0.85); color: #0f0;
+      padding: 20px; user-select: none;
     }
     #scoreboard h3 { margin-bottom: 20px; text-align: center; }
     #scoreboard p { margin: 8px 0; font-size: 18px; }
     canvas {
       position: absolute; top: 0; left: 200px;
       background: #000;
+      cursor: pointer;
     }
   </style>
 </head>
@@ -36,37 +36,33 @@
     // — Setup & resize —
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    const sidebar = 200;
+    const SIDEBAR = 200;
     function resize() {
-      canvas.width = window.innerWidth - sidebar;
+      canvas.width = window.innerWidth - SIDEBAR;
       canvas.height = window.innerHeight;
+      tank.y = canvas.height - tank.h - 20;
     }
     window.addEventListener('resize', resize);
-    resize();
 
     // — Game state —
     const tank = { w: 140, h: 70, x: 0, y: 0, speed: 12 };
-    tank.x = (canvas.width - tank.w) / 2;
-    tank.y = canvas.height - tank.h - 20;
+    tank.x = (window.innerWidth - SIDEBAR - tank.w) / 2;
 
     let bullets = [], obstacles = [];
     let score = 0, missed = 0, level = 1;
     let firePower = 1, shotsFired = 0;
     let timeLeft = 30, baseObstacles = 100, maxMissed = 10, obstacleSpeed = 2;
 
+    // — Input tracking on window —
     const keys = {};
-
-    // — Input handling —
-    document.addEventListener('keydown', e => {
-      if (['ArrowLeft','ArrowRight','a','d'].includes(e.key)) {
+    window.addEventListener('keydown', e => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'a' || e.key === 'd') {
         keys[e.key] = true;
-        e.preventDefault();
       }
     });
-    document.addEventListener('keyup', e => {
-      if (['ArrowLeft','ArrowRight','a','d'].includes(e.key)) {
+    window.addEventListener('keyup', e => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'a' || e.key === 'd') {
         keys[e.key] = false;
-        e.preventDefault();
       }
     });
 
@@ -77,19 +73,19 @@
     }
     function drawBullets() {
       ctx.fillStyle = 'yellow';
-      bullets.forEach(b => {
+      for (const b of bullets) {
         ctx.beginPath();
-        ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
         ctx.fill();
-      });
+      }
     }
     function drawObstacles() {
-      obstacles.forEach(o => {
+      for (const o of obstacles) {
         ctx.fillStyle = o.color;
         ctx.beginPath();
-        ctx.arc(o.x, o.y, o.r, 0, Math.PI*2);
+        ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2);
         ctx.fill();
-      });
+      }
     }
     function updateScoreboard() {
       document.getElementById('score').textContent = score;
@@ -98,11 +94,10 @@
       document.getElementById('missed').textContent = missed;
     }
 
-    // — Core logic —
+    // — Movement & game logic —
     function moveTank() {
       if (keys['ArrowLeft'] || keys['a']) tank.x -= tank.speed;
       if (keys['ArrowRight'] || keys['d']) tank.x += tank.speed;
-      // clamp
       tank.x = Math.max(0, Math.min(canvas.width - tank.w, tank.x));
     }
 
@@ -110,27 +105,29 @@
       shotsFired++;
       if (shotsFired % 10 === 0) firePower++;
       for (let i = 0; i < firePower; i++) {
-        const offset = (i - (firePower-1)/2) * 22;
-        bullets.push({ x: tank.x + tank.w/2 + offset, y: tank.y, r: 10, speed: 14 });
+        const offset = (i - (firePower - 1) / 2) * 22;
+        bullets.push({ x: tank.x + tank.w / 2 + offset, y: tank.y, r: 10, speed: 14 });
       }
     }
 
     function updateBullets() {
-      bullets.forEach(b => b.y -= b.speed);
-      bullets = bullets.filter(b => b.y + b.r > 0);
+      bullets = bullets.filter(b => {
+        b.y -= b.speed;
+        return b.y + b.r > 0;
+      });
     }
 
     function spawnObstacle() {
       const color = Math.random() < 0.1 ? 'cyan' : 'red';
       obstacles.push({
-        x: Math.random()*(canvas.width - 60) + 30,
+        x: Math.random() * (canvas.width - 60) + 30,
         y: -50, r: 30, color, speed: obstacleSpeed
       });
     }
 
     function updateObstacles() {
-      obstacles.forEach(o => o.y += o.speed);
       obstacles = obstacles.filter(o => {
+        o.y += o.speed;
         if (o.y - o.r > canvas.height) {
           missed++;
           return false;
@@ -140,20 +137,22 @@
     }
 
     function detectCollisions() {
-      bullets.forEach((b, bi) => {
-        obstacles.forEach((o, oi) => {
+      for (let bi = bullets.length - 1; bi >= 0; bi--) {
+        for (let oi = obstacles.length - 1; oi >= 0; oi--) {
+          const b = bullets[bi], o = obstacles[oi];
           const dx = b.x - o.x, dy = b.y - o.y;
           if (Math.hypot(dx, dy) < b.r + o.r) {
-            bullets.splice(bi,1);
-            obstacles.splice(oi,1);
+            bullets.splice(bi, 1);
+            obstacles.splice(oi, 1);
             if (o.color === 'cyan') firePower++;
             score++;
+            break;
           }
-        });
-      });
+        }
+      }
     }
 
-    // — Main loop —
+    // — Main render loop —
     function loop() {
       moveTank();
       updateBullets();
@@ -182,7 +181,7 @@
         firePower = 1;
         shotsFired = 0;
         timeLeft = 30;
-        maxMissed = Math.max(1, 10 - (level-1));
+        maxMissed = Math.max(1, 10 - (level - 1));
         baseObstacles = Math.floor(baseObstacles * 1.2);
         obstacleSpeed += 0.5;
       }
@@ -191,8 +190,17 @@
       if (obstacles.length < baseObstacles) spawnObstacle();
     }, 300);
 
-    // — Start!
-    requestAnimationFrame(loop);
+    // — Start everything after a click to ensure focus —
+    canvas.addEventListener('click', () => {
+      canvas.removeEventListener('click', arguments.callee);
+      resize();
+      requestAnimationFrame(loop);
+    });
+
+    // Instruct the player to click to begin:
+    ctx.font = '20px Arial';
+    ctx.fillStyle = '#0f0';
+    ctx.fillText('Click canvas to start', 50, 50);
   </script>
 </body>
 </html>
