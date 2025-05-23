@@ -1,281 +1,182 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>KaKaReza Shooting Game</title>
-<style>
-  body, html {
-    margin: 0; padding: 0; overflow: hidden; background: black; font-family: Arial, sans-serif;
-  }
-  #gameContainer {
-    position: relative;
-    width: 100vw; height: 100vh;
-    display: flex;
-  }
-  #scoreboard {
-    width: 100px;
-    background: #222;
-    color: #0f0;
-    font-size: 20px;
-    padding: 10px;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-  #scoreboard h2 {
-    margin: 0 0 20px 0;
-    font-family: 'Courier New', Courier, monospace;
-  }
-  #gameCanvas {
-    flex-grow: 1;
-    background: linear-gradient(to bottom, #001022, #000000);
-    display: block;
-  }
-</style>
+  <meta charset="UTF-8">
+  <title>KaKaReza Shooting Game</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; background: radial-gradient(circle, #000 40%, #111); }
+    #scoreboard {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 200px;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      font-family: Arial, sans-serif;
+      padding: 10px;
+      box-sizing: border-box;
+      z-index: 10;
+    }
+  </style>
 </head>
 <body>
-
-<div id="gameContainer">
-  <div id="scoreboard">
-    <h2>KaKaReza<br>Shooting Game</h2>
-    <div>Score: <span id="score">0</span></div>
-    <div>Time: <span id="time">60</span>s</div>
-  </div>
-  <canvas id="gameCanvas"></canvas>
+<canvas id="gameCanvas"></canvas>
+<div id="scoreboard">
+  <h3>KaKaReza Shooting Game</h3>
+  <p>Score: <span id="score">0</span></p>
+  <p>Level: <span id="level">1</span></p>
+  <p>Time Left: <span id="time">30</span>s</p>
+  <p>Missed: <span id="missed">0</span></p>
 </div>
 
 <script>
-(() => {
-  const canvas = document.getElementById('gameCanvas');
-  const ctx = canvas.getContext('2d');
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
 
-  // Resize canvas to fill remaining width and height
-  function resize() {
-    canvas.width = window.innerWidth - 100; // subtract scoreboard width
-    canvas.height = window.innerHeight;
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let tank = { x: canvas.width / 2 - 60, y: canvas.height - 100, width: 120, height: 60 };
+let bullets = [];
+let obstacles = [];
+let score = 0, missed = 0, level = 1, firePower = 1, shotsFired = 0;
+let timeLeft = 30, baseObstacles = 100, maxMissed = 10, obstacleSpeed = 2;
+let keys = {};
+
+function drawTank() {
+  ctx.fillStyle = "lime";
+  ctx.fillRect(tank.x, tank.y, tank.width, tank.height);
+}
+
+function fireBullet() {
+  shotsFired++;
+  if (shotsFired % 10 === 0) firePower++;
+  for (let i = 0; i < firePower; i++) {
+    bullets.push({
+      x: tank.x + tank.width / 2 + (i - (firePower - 1) / 2) * 16,
+      y: tank.y,
+      radius: 8
+    });
   }
-  resize();
-  window.addEventListener('resize', resize);
+}
 
-  // Game variables
-  const carWidth = 60;
-  const carHeight = 30;
-  let carX = (canvas.width - carWidth) / 2;
-  const carY = canvas.height - carHeight - 10;
-
-  let bullets = [];
-  let obstacles = [];
-  let score = 0;
-  let timeLeft = 60;
-  let gameOver = false;
-
-  // Sounds
-  const shootSound = new Audio('https://actions.google.com/sounds/v1/impacts/wood_plank_flicks.ogg');
-  const hitSound = new Audio('https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg');
-
-  // Touch controls variables
-  let movingCar = false;
-  let moveStartX = 0;
-  let carStartX = 0;
-
-  // Update scoreboard display
-  function updateScoreboard() {
-    document.getElementById('score').textContent = score;
-    document.getElementById('time').textContent = timeLeft;
-  }
-
-  // Create new obstacle
-  function spawnObstacle() {
-    const size = 30 + Math.random() * 20;
-    const x = Math.random() * (canvas.width - size);
-    const speed = 2 + Math.random() * 2;
-    obstacles.push({ x, y: -size, size, speed });
-  }
-
-  // Shoot bullet
-  function shoot() {
-    bullets.push({ x: carX + carWidth / 2 - 3, y: carY, width: 6, height: 12, speed: 8 });
-    shootSound.currentTime = 0;
-    shootSound.play();
-  }
-
-  // Draw car
-  function drawCar() {
-    ctx.fillStyle = '#0f0';
-    ctx.fillRect(carX, carY, carWidth, carHeight);
-    // Simple wheels
-    ctx.fillStyle = '#060';
+function drawBullets() {
+  ctx.fillStyle = "yellow";
+  bullets.forEach(b => {
     ctx.beginPath();
-    ctx.arc(carX + 10, carY + carHeight, 8, 0, Math.PI * 2);
-    ctx.arc(carX + carWidth - 10, carY + carHeight, 8, 0, Math.PI * 2);
+    ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
     ctx.fill();
-  }
+  });
+}
 
-  // Draw obstacles
-  function drawObstacles() {
-    ctx.fillStyle = '#f00';
-    obstacles.forEach(o => {
-      ctx.beginPath();
-      ctx.arc(o.x + o.size / 2, o.y + o.size / 2, o.size / 2, 0, Math.PI * 2);
-      ctx.fill();
-    });
-  }
+function updateBullets() {
+  bullets.forEach(b => b.y -= 10);
+  bullets = bullets.filter(b => b.y > 0);
+}
 
-  // Draw bullets
-  function drawBullets() {
-    ctx.fillStyle = '#ff0';
-    bullets.forEach(b => {
-      ctx.fillRect(b.x, b.y, b.width, b.height);
-    });
-  }
+function spawnObstacle() {
+  const color = Math.random() < 0.1 ? "cyan" : "red";
+  obstacles.push({
+    x: Math.random() * (canvas.width - 60) + 30,
+    y: -30,
+    radius: 30,
+    color: color
+  });
+}
 
-  // Move obstacles
-  function updateObstacles() {
-    obstacles.forEach(o => {
-      o.y += o.speed;
-    });
-    // Remove obstacles that moved off screen
-    obstacles = obstacles.filter(o => o.y < canvas.height + o.size);
-  }
+function drawObstacles() {
+  obstacles.forEach(o => {
+    ctx.fillStyle = o.color;
+    ctx.beginPath();
+    ctx.arc(o.x, o.y, o.radius, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
 
-  // Move bullets
-  function updateBullets() {
-    bullets.forEach(b => {
-      b.y -= b.speed;
-    });
-    bullets = bullets.filter(b => b.y + b.height > 0);
-  }
+function updateObstacles() {
+  obstacles.forEach(o => o.y += obstacleSpeed);
+  obstacles = obstacles.filter(o => {
+    if (o.y > canvas.height) {
+      missed++;
+      return false;
+    }
+    return true;
+  });
+}
 
-  // Check collisions between bullets and obstacles
-  function checkCollisions() {
-    for (let i = obstacles.length - 1; i >= 0; i--) {
-      const o = obstacles[i];
-      for (let j = bullets.length - 1; j >= 0; j--) {
-        const b = bullets[j];
-        // Simple circle-rectangle collision check
-        const distX = Math.abs((b.x + b.width / 2) - (o.x + o.size / 2));
-        const distY = Math.abs((b.y + b.height / 2) - (o.y + o.size / 2));
-
-        if (distX <= (o.size / 2 + b.width / 2) && distY <= (o.size / 2 + b.height / 2)) {
-          // Collision detected
-          obstacles.splice(i, 1);
-          bullets.splice(j, 1);
-          score++;
-          hitSound.currentTime = 0;
-          hitSound.play();
-          break;
-        }
+function detectCollisions() {
+  bullets.forEach((b, bi) => {
+    obstacles.forEach((o, oi) => {
+      const dx = b.x - o.x;
+      const dy = b.y - o.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < b.radius + o.radius) {
+        bullets.splice(bi, 1);
+        obstacles.splice(oi, 1);
+        if (o.color === "cyan") firePower++;
+        score++;
       }
-    }
+    });
+  });
+}
+
+function updateScoreboard() {
+  document.getElementById("score").textContent = score;
+  document.getElementById("level").textContent = level;
+  document.getElementById("time").textContent = timeLeft;
+  document.getElementById("missed").textContent = missed;
+}
+
+function moveTank() {
+  if (keys["ArrowLeft"] || keys["a"]) tank.x -= 10;
+  if (keys["ArrowRight"] || keys["d"]) tank.x += 10;
+  tank.x = Math.max(0, Math.min(canvas.width - tank.width, tank.x));
+}
+
+window.addEventListener("keydown", e => keys[e.key] = true);
+window.addEventListener("keyup", e => keys[e.key] = false);
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawTank();
+  drawBullets();
+  drawObstacles();
+}
+
+function gameLoop() {
+  moveTank();
+  updateBullets();
+  updateObstacles();
+  detectCollisions();
+  draw();
+  updateScoreboard();
+  if (missed >= maxMissed) {
+    alert("Game Over! Final Score: " + score);
+    document.location.reload();
   }
+}
 
-  // Game loop
-  function gameLoop() {
-    if (gameOver) return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    drawCar();
-    drawObstacles();
-    drawBullets();
-
-    updateObstacles();
-    updateBullets();
-    checkCollisions();
-
-    updateScoreboard();
-
-    requestAnimationFrame(gameLoop);
+setInterval(fireBullet, 300);
+setInterval(() => {
+  if (timeLeft > 0) {
+    timeLeft--;
+  } else {
+    level++;
+    firePower = 1;
+    timeLeft = 30;
+    maxMissed = Math.max(1, 10 - (level - 1));
+    baseObstacles = Math.floor(baseObstacles * 1.2);
+    obstacleSpeed += 0.5;
   }
+}, 1000);
 
-  // Timer countdown
-  const timerInterval = setInterval(() => {
-    if (timeLeft > 0) {
-      timeLeft--;
-      updateScoreboard();
-    } else {
-      gameOver = true;
-      clearInterval(timerInterval);
-      alert(`Game Over! Your score: ${score}`);
-    }
-  }, 1000);
+setInterval(() => {
+  if (obstacles.length < baseObstacles) spawnObstacle();
+}, 300);
 
-  // Spawn obstacles every 700ms
-  const obstacleInterval = setInterval(() => {
-    if (!gameOver) spawnObstacle();
-    else clearInterval(obstacleInterval);
-  }, 700);
-
-  // Touch controls handlers
-  canvas.addEventListener('touchstart', e => {
-    e.preventDefault();
-    const touch = e.touches[0];
-    const rect = canvas.getBoundingClientRect();
-    const touchX = touch.clientX - rect.left;
-    const touchY = touch.clientY - rect.top;
-
-    // Bottom 20% of screen area for car movement
-    if (touchY > canvas.height * 0.8) {
-      movingCar = true;
-      moveStartX = touchX;
-      carStartX = carX;
-    } else {
-      shoot();
-    }
-  }, { passive: false });
-
-  canvas.addEventListener('touchmove', e => {
-    e.preventDefault();
-    if (!movingCar) return;
-    const touch = e.touches[0];
-    const rect = canvas.getBoundingClientRect();
-    const touchX = touch.clientX - rect.left;
-
-    let dx = touchX - moveStartX;
-    carX = carStartX + dx;
-    if (carX < 0) carX = 0;
-    if (carX > canvas.width - carWidth) carX = canvas.width - carWidth;
-  }, { passive: false });
-
-  canvas.addEventListener('touchend', e => {
-    movingCar = false;
-  });
-
-  // Also add mouse support for desktop testing
-  let mouseDown = false;
-  canvas.addEventListener('mousedown', e => {
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-    if (mouseY > canvas.height * 0.8) {
-      mouseDown = true;
-      moveStartX = mouseX;
-      carStartX = carX;
-    } else {
-      shoot();
-    }
-  });
-
-  canvas.addEventListener('mousemove', e => {
-    if (!mouseDown) return;
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-
-    let dx = mouseX - moveStartX;
-    carX = carStartX + dx;
-    if (carX < 0) carX = 0;
-    if (carX > canvas.width - carWidth) carX = canvas.width - carWidth;
-  });
-
-  canvas.addEventListener('mouseup', e => {
-    mouseDown = false;
-  });
-
-  gameLoop();
-})();
+setInterval(gameLoop, 1000 / 60);
 </script>
-
 </body>
 </html>
