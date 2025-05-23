@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <title>KaKaReza Shooting Game</title>
   <style>
-    /* Reset & layout */
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #000; font-family: Arial, sans-serif; }
     #scoreboard {
@@ -18,7 +17,6 @@
     canvas {
       position: absolute; top: 0; left: 200px;
       background: #000;
-      cursor: pointer;
     }
   </style>
 </head>
@@ -33,10 +31,11 @@
   <canvas id="gameCanvas"></canvas>
 
   <script>
-    // — Setup & resize —
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const SIDEBAR = 200;
+
+    // handle resize
     function resize() {
       canvas.width = window.innerWidth - SIDEBAR;
       canvas.height = window.innerHeight;
@@ -44,48 +43,49 @@
     }
     window.addEventListener('resize', resize);
 
-    // — Game state —
+    // GAME STATE
     const tank = { w: 140, h: 70, x: 0, y: 0, speed: 12 };
     tank.x = (window.innerWidth - SIDEBAR - tank.w) / 2;
-
     let bullets = [], obstacles = [];
     let score = 0, missed = 0, level = 1;
     let firePower = 1, shotsFired = 0;
     let timeLeft = 30, baseObstacles = 100, maxMissed = 10, obstacleSpeed = 2;
 
-    // — Input tracking on window —
+    // INPUT
     const keys = {};
-    window.addEventListener('keydown', e => {
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'a' || e.key === 'd') {
+    document.addEventListener('keydown', e => {
+      if (['ArrowLeft','ArrowRight','a','d'].includes(e.key)) {
         keys[e.key] = true;
+        e.preventDefault();
       }
     });
-    window.addEventListener('keyup', e => {
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'a' || e.key === 'd') {
+    document.addEventListener('keyup', e => {
+      if (['ArrowLeft','ArrowRight','a','d'].includes(e.key)) {
         keys[e.key] = false;
+        e.preventDefault();
       }
     });
 
-    // — Drawing helpers —
+    // DRAW HELPERS
     function drawTank() {
       ctx.fillStyle = 'lime';
       ctx.fillRect(tank.x, tank.y, tank.w, tank.h);
     }
     function drawBullets() {
       ctx.fillStyle = 'yellow';
-      for (const b of bullets) {
+      bullets.forEach(b => {
         ctx.beginPath();
-        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
         ctx.fill();
-      }
+      });
     }
     function drawObstacles() {
-      for (const o of obstacles) {
+      obstacles.forEach(o => {
         ctx.fillStyle = o.color;
         ctx.beginPath();
-        ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2);
+        ctx.arc(o.x, o.y, o.r, 0, Math.PI*2);
         ctx.fill();
-      }
+      });
     }
     function updateScoreboard() {
       document.getElementById('score').textContent = score;
@@ -94,57 +94,48 @@
       document.getElementById('missed').textContent = missed;
     }
 
-    // — Movement & game logic —
+    // GAME LOGIC
     function moveTank() {
       if (keys['ArrowLeft'] || keys['a']) tank.x -= tank.speed;
-      if (keys['ArrowRight'] || keys['d']) tank.x += tank.speed;
+      if (keys['ArrowRight']|| keys['d']) tank.x += tank.speed;
       tank.x = Math.max(0, Math.min(canvas.width - tank.w, tank.x));
     }
-
     function fireBullet() {
       shotsFired++;
       if (shotsFired % 10 === 0) firePower++;
-      for (let i = 0; i < firePower; i++) {
-        const offset = (i - (firePower - 1) / 2) * 22;
-        bullets.push({ x: tank.x + tank.w / 2 + offset, y: tank.y, r: 10, speed: 14 });
+      for (let i=0; i<firePower; i++) {
+        const offset = (i - (firePower-1)/2) * 22;
+        bullets.push({ x: tank.x + tank.w/2 + offset, y: tank.y, r: 10, speed: 14 });
       }
     }
-
     function updateBullets() {
       bullets = bullets.filter(b => {
         b.y -= b.speed;
         return b.y + b.r > 0;
       });
     }
-
     function spawnObstacle() {
       const color = Math.random() < 0.1 ? 'cyan' : 'red';
       obstacles.push({
-        x: Math.random() * (canvas.width - 60) + 30,
+        x: Math.random()*(canvas.width-60)+30,
         y: -50, r: 30, color, speed: obstacleSpeed
       });
     }
-
     function updateObstacles() {
       obstacles = obstacles.filter(o => {
         o.y += o.speed;
-        if (o.y - o.r > canvas.height) {
-          missed++;
-          return false;
-        }
+        if (o.y - o.r > canvas.height) { missed++; return false; }
         return true;
       });
     }
-
     function detectCollisions() {
-      for (let bi = bullets.length - 1; bi >= 0; bi--) {
-        for (let oi = obstacles.length - 1; oi >= 0; oi--) {
-          const b = bullets[bi], o = obstacles[oi];
-          const dx = b.x - o.x, dy = b.y - o.y;
-          if (Math.hypot(dx, dy) < b.r + o.r) {
-            bullets.splice(bi, 1);
-            obstacles.splice(oi, 1);
-            if (o.color === 'cyan') firePower++;
+      for (let bi=bullets.length-1; bi>=0; bi--) {
+        for (let oi=obstacles.length-1; oi>=0; oi--) {
+          const b=bullets[bi], o=obstacles[oi];
+          if (Math.hypot(b.x-o.x, b.y-o.y) < b.r+o.r) {
+            bullets.splice(bi,1);
+            obstacles.splice(oi,1);
+            if (o.color==='cyan') firePower++;
             score++;
             break;
           }
@@ -152,14 +143,14 @@
       }
     }
 
-    // — Main render loop —
+    // MAIN LOOP
     function loop() {
       moveTank();
       updateBullets();
       updateObstacles();
       detectCollisions();
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0,0,canvas.width,canvas.height);
       drawTank();
       drawBullets();
       drawObstacles();
@@ -172,7 +163,7 @@
       requestAnimationFrame(loop);
     }
 
-    // — Timers —
+    // TIMERS
     setInterval(fireBullet, 300);
     setInterval(() => {
       if (timeLeft > 0) timeLeft--;
@@ -181,8 +172,8 @@
         firePower = 1;
         shotsFired = 0;
         timeLeft = 30;
-        maxMissed = Math.max(1, 10 - (level - 1));
-        baseObstacles = Math.floor(baseObstacles * 1.2);
+        maxMissed = Math.max(1, 10 - (level-1));
+        baseObstacles = Math.floor(baseObstacles*1.2);
         obstacleSpeed += 0.5;
       }
     }, 1000);
@@ -190,17 +181,9 @@
       if (obstacles.length < baseObstacles) spawnObstacle();
     }, 300);
 
-    // — Start everything after a click to ensure focus —
-    canvas.addEventListener('click', () => {
-      canvas.removeEventListener('click', arguments.callee);
-      resize();
-      requestAnimationFrame(loop);
-    });
-
-    // Instruct the player to click to begin:
-    ctx.font = '20px Arial';
-    ctx.fillStyle = '#0f0';
-    ctx.fillText('Click canvas to start', 50, 50);
+    // START UP
+    resize();
+    loop();
   </script>
 </body>
 </html>
