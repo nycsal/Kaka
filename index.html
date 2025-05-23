@@ -14,9 +14,9 @@
     }
     canvas {
       display: block;
-      width: 100vw;
-      height: 100vh;
       background: #000;
+      width: 100vw;
+      height: 100dvh; /* Use dynamic viewport height for mobile */
       touch-action: none;
     }
   </style>
@@ -28,7 +28,6 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Resize canvas to fill screen
 function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -36,7 +35,7 @@ function resizeCanvas() {
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
-// Screen-based units
+// Helpers
 let W = () => canvas.width;
 let H = () => canvas.height;
 
@@ -45,7 +44,7 @@ let car = {
   w: W() * 0.1,
   h: H() * 0.05,
   x: W() * 0.45,
-  y: H() - H() * 0.1 - H() * 0.05, // Adjusted so car is above bottom
+  y: H() - H() * 0.15 // Adjusted to stay visible above bottom
 };
 
 let bullets = [];
@@ -61,16 +60,12 @@ function drawCar() {
 
 function drawBullets() {
   ctx.fillStyle = 'red';
-  bullets.forEach(b => {
-    ctx.fillRect(b.x, b.y, b.w, b.h);
-  });
+  bullets.forEach(b => ctx.fillRect(b.x, b.y, b.w, b.h));
 }
 
 function drawEnemies() {
   ctx.fillStyle = 'lime';
-  enemies.forEach(e => {
-    ctx.fillRect(e.x, e.y, e.w, e.h);
-  });
+  enemies.forEach(e => ctx.fillRect(e.x, e.y, e.w, e.h));
 }
 
 function drawHUD() {
@@ -150,7 +145,7 @@ canvas.addEventListener('touchstart', e => {
   }
 }, { passive: false });
 
-// Keyboard controls
+// Keyboard controls (optional desktop support)
 document.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft') car.x -= W() * 0.05;
   if (e.key === 'ArrowRight') car.x += W() * 0.05;
