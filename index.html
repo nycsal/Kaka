@@ -1,183 +1,177 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>KaKaReza Shooting Game</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>KaKaReza Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <style>
     html, body {
-      margin: 0; padding: 0; overflow: hidden;
-      background: black;
-      color: white;
-      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
       height: 100%;
-      touch-action: none;
+      overflow: hidden;
+      background: black;
     }
     canvas {
       display: block;
-      background: #111;
       width: 100vw;
       height: 100vh;
+      background: #000;
+      touch-action: none;
     }
   </style>
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
-  <script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
+<canvas id="gameCanvas"></canvas>
 
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
 
-    // Game scale based on canvas size
-    let scaleX, scaleY;
+// Set canvas size to actual pixels (not just CSS size)
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
 
-    function updateScale() {
-      scaleX = canvas.width / 400;  // design width 400 units
-      scaleY = canvas.height / 600; // design height 600 units
-    }
-    updateScale();
+// Use screen-based units
+let W = () => canvas.width;
+let H = () => canvas.height;
 
-    window.addEventListener('resize', () => {
-      resizeCanvas();
-      updateScale();
-    });
+// Game objects
+let car = {
+  w: W() * 0.1,
+  h: H() * 0.05,
+  x: W() * 0.45,
+  y: H() * 0.9,
+};
 
-    // Game variables scaled by design units
-    let carWidth = 40;
-    let carHeight = 20;
-    let carX = canvas.width / 2 - carWidth * scaleX / 2;
-    let carY = canvas.height - carHeight * scaleY - 20 * scaleY;
+let bullets = [];
+let enemies = [];
+let score = 0;
+let timer = 60;
 
-    let score = 0;
-    let timer = 60;
+// Draw functions
+function drawCar() {
+  ctx.fillStyle = 'white';
+  ctx.fillRect(car.x, car.y, car.w, car.h);
+}
 
-    const bullets = [];
-    const enemies = [];
+function drawBullets() {
+  ctx.fillStyle = 'red';
+  bullets.forEach(b => {
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+  });
+}
 
-    function drawCar() {
-      ctx.fillStyle = 'white';
-      ctx.fillRect(carX, carY, carWidth * scaleX, carHeight * scaleY);
-    }
+function drawEnemies() {
+  ctx.fillStyle = 'lime';
+  enemies.forEach(e => {
+    ctx.fillRect(e.x, e.y, e.w, e.h);
+  });
+}
 
-    function drawBullets() {
-      ctx.fillStyle = 'red';
-      bullets.forEach(b => {
-        ctx.fillRect(b.x, b.y, 5 * scaleX, 10 * scaleY);
-      });
-    }
+function drawHUD() {
+  ctx.fillStyle = 'white';
+  ctx.font = `${Math.floor(H() * 0.03)}px sans-serif`;
+  ctx.fillText(`Score: ${score}`, 10, 30);
+  ctx.fillText(`Time: ${timer}`, W() - 100, 30);
+}
 
-    function drawEnemies() {
-      ctx.fillStyle = 'green';
-      enemies.forEach(e => {
-        ctx.fillRect(e.x, e.y, 30 * scaleX, 30 * scaleY);
-      });
-    }
+// Main game loop
+function update() {
+  ctx.clearRect(0, 0, W(), H());
 
-    function update() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      drawCar();
-      drawBullets();
-      drawEnemies();
+  drawCar();
+  drawBullets();
+  drawEnemies();
+  drawHUD();
 
-      // Move bullets up
-      for (let i = bullets.length -1; i >= 0; i--) {
-        bullets[i].y -= 7 * scaleY;
-        if (bullets[i].y + 10 * scaleY < 0) bullets.splice(i, 1);
-      }
+  // Move bullets
+  bullets.forEach((b, i) => {
+    b.y -= H() * 0.01;
+    if (b.y + b.h < 0) bullets.splice(i, 1);
+  });
 
-      // Move enemies down
-      for (let i = enemies.length -1; i >= 0; i--) {
-        enemies[i].y += 3 * scaleY;
-        if (enemies[i].y > canvas.height) enemies.splice(i,1);
-      }
+  // Move enemies
+  enemies.forEach((e, i) => {
+    e.y += H() * 0.005;
+    if (e.y > H()) enemies.splice(i, 1);
+  });
 
-      // Collision detection
-      for (let i = enemies.length - 1; i >= 0; i--) {
-        const e = enemies[i];
-        for (let j = bullets.length - 1; j >= 0; j--) {
-          const b = bullets[j];
-          if (
-            b.x < e.x + 30 * scaleX &&
-            b.x + 5 * scaleX > e.x &&
-            b.y < e.y + 30 * scaleY &&
-            b.y + 10 * scaleY > e.y
-          ) {
-            enemies.splice(i, 1);
-            bullets.splice(j, 1);
-            score += 10;
-            break;
-          }
-        }
-      }
-
-      // Draw score and timer
-      ctx.fillStyle = 'white';
-      ctx.font = `${16 * scaleX}px sans-serif`;
-      ctx.fillText('Score: ' + score, 10 * scaleX, 25 * scaleY);
-      ctx.fillText('Time: ' + timer, canvas.width - 100 * scaleX, 25 * scaleY);
-    }
-
-    function spawnEnemy() {
-      enemies.push({
-        x: Math.random() * (canvas.width - 30 * scaleX),
-        y: -30 * scaleY,
-      });
-    }
-
-    setInterval(update, 1000 / 60);
-    setInterval(spawnEnemy, 1000);
-    setInterval(() => {
-      timer--;
-      if (timer <= 0) {
-        alert("Time’s up! Score: " + score);
-        timer = 60;
-        score = 0;
-        enemies.length = 0;
-        bullets.length = 0;
-      }
-    }, 1000);
-
-    canvas.addEventListener('touchmove', (e) => {
-      const touch = e.touches[0];
-      if (touch.clientY > canvas.height - 100 * scaleY) {
-        carX = touch.clientX - (carWidth * scaleX) / 2;
-        // Clamp car position inside canvas
-        carX = Math.min(Math.max(carX, 0), canvas.width - carWidth * scaleX);
-      }
-      e.preventDefault();
-    }, { passive: false });
-
-    canvas.addEventListener('touchstart', (e) => {
-      if (e.touches[0].clientY < canvas.height - 100 * scaleY) {
-        bullets.push({
-          x: carX + (carWidth * scaleX) / 2 - (5 * scaleX) / 2,
-          y: carY,
-        });
-      }
-      e.preventDefault();
-    }, { passive: false });
-
-    document.addEventListener('keydown', (e) => {
-      const step = 10 * scaleX;
-      if (e.key === 'ArrowLeft') {
-        carX = Math.max(carX - step, 0);
-      }
-      if (e.key === 'ArrowRight') {
-        carX = Math.min(carX + step, canvas.width - carWidth * scaleX);
-      }
-      if (e.key === ' ') {
-        bullets.push({
-          x: carX + (carWidth * scaleX) / 2 - (5 * scaleX) / 2,
-          y: carY,
-        });
+  // Check collisions
+  enemies.forEach((e, ei) => {
+    bullets.forEach((b, bi) => {
+      if (
+        b.x < e.x + e.w && b.x + b.w > e.x &&
+        b.y < e.y + e.h && b.y + b.h > e.y
+      ) {
+        enemies.splice(ei, 1);
+        bullets.splice(bi, 1);
+        score += 10;
       }
     });
-  </script>
+  });
+}
+
+function spawnEnemy() {
+  const size = W() * 0.08;
+  enemies.push({
+    x: Math.random() * (W() - size),
+    y: -size,
+    w: size,
+    h: size,
+  });
+}
+
+function shootBullet() {
+  const bulletW = W() * 0.02;
+  const bulletH = H() * 0.04;
+  bullets.push({
+    x: car.x + car.w / 2 - bulletW / 2,
+    y: car.y,
+    w: bulletW,
+    h: bulletH
+  });
+}
+
+// Controls
+canvas.addEventListener('touchmove', e => {
+  const t = e.touches[0];
+  if (t.clientY > H() * 0.75) {
+    car.x = t.clientX - car.w / 2;
+    car.x = Math.max(0, Math.min(car.x, W() - car.w));
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchstart', e => {
+  const t = e.touches[0];
+  if (t.clientY < H() * 0.75) {
+    shootBullet();
+  }
+}, { passive: false });
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft') car.x -= W() * 0.05;
+  if (e.key === 'ArrowRight') car.x += W() * 0.05;
+  if (e.key === ' ') shootBullet();
+});
+
+// Game start
+setInterval(update, 1000 / 60);
+setInterval(spawnEnemy, 1000);
+setInterval(() => {
+  timer--;
+  if (timer <= 0) {
+    alert("Time's up! Score: " + score);
+    timer = 60;
+    score = 0;
+    enemies = [];
+    bullets = [];
+  }
+}, 1000);
+</script>
 </body>
 </html>
