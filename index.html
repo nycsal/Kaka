@@ -9,6 +9,7 @@
       margin: 0; padding: 0; height: 100%; overflow: hidden; background: black;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       user-select: none;
+      -webkit-tap-highlight-color: transparent;
     }
     canvas {
       display: block;
@@ -27,7 +28,7 @@
       padding: 8px 20px;
       color: white;
       font-weight: bold;
-      font-size: 24px;
+      font-size: 26px;
       letter-spacing: 2px;
       user-select: none;
       pointer-events: none;
@@ -37,7 +38,7 @@
         0 0 20px #00ff00;
       font-family: 'Orbitron', monospace;
       z-index: 10;
-      min-width: 140px;
+      min-width: 160px;
       text-align: center;
     }
   </style>
@@ -64,12 +65,15 @@ let H = () => canvas.height;
 
 // Game state
 let car = {
-  w: W() * 0.12,
-  h: H() * 0.06,
-  x: W() * 0.44,
+  w: W() * 0.18, // wider for easier finger tracking
+  h: H() * 0.07,
+  x: W() * 0.41,
   y: H() - H() * 0.15,
-  speed: W() * 0.015,
+  speed: W() * 0.02,
   color: '#0f0',
+  dragging: false,
+  dragOffsetX: 0,
+  opacity: 1,
 };
 
 let bullets = [];
@@ -78,11 +82,12 @@ let specialEnemies = [];
 let score = 0;
 let timer = 60;
 
-let activeTouches = {}; // Track multiple touches
+let touchIdForCar = null;
 
-// Car looks like an attack tool - draw a sleek spaceship-like shape
+// Car looks like an attack tool - spaceship style, now wider
 function drawCar() {
   ctx.save();
+  ctx.globalAlpha = car.opacity;
   ctx.translate(car.x + car.w / 2, car.y + car.h / 2);
 
   // Body
@@ -102,6 +107,7 @@ function drawCar() {
   ctx.fill();
 
   ctx.restore();
+  ctx.globalAlpha = 1;
 }
 
 function drawBullets() {
@@ -115,19 +121,22 @@ function drawEnemies() {
     ctx.fillRect(e.x, e.y, e.w, e.h);
   });
   specialEnemies.forEach(se => {
-    // special enemies with random bright color
-    ctx.fillStyle = se.color;
+    // special enemies with bright glowing color
+    let gradient = ctx.createRadialGradient(se.x + se.w / 2, se.y + se.h / 2, se.w/4, se.x + se.w / 2, se.y + se.h / 2, se.w);
+    gradient.addColorStop(0, se.color);
+    gradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = gradient;
     ctx.beginPath();
     ctx.arc(se.x + se.w / 2, se.y + se.h / 2, se.w / 2, 0, 2 * Math.PI);
     ctx.fill();
   });
 }
 
-function drawHUD() {
-  // Now handled by #scoreboard div
+// Update score board visually
+function updateScoreboard() {
+  scoreboard.textContent = `Score: ${score} | Time: ${timer}`;
 }
 
-// Game loop
 function update() {
   ctx.clearRect(0, 0, W(), H());
 
@@ -147,7 +156,7 @@ function update() {
     if (e.y > H()) enemies.splice(i, 1);
   });
 
-  // Move special enemies (slower)
+  // Move special enemies slower
   specialEnemies.forEach((se, i) => {
     se.y += H() * 0.003;
     if (se.y > H()) specialEnemies.splice(i, 1);
@@ -167,7 +176,7 @@ function update() {
     });
   });
 
-  // Bullet hits special enemy - gives random power
+  // Bullet hits special enemy - trigger power
   specialEnemies.forEach((se, sei) => {
     bullets.forEach((b, bi) => {
       if (
@@ -186,15 +195,12 @@ function update() {
   if (car.x < 0) car.x = 0;
   if (car.x + car.w > W()) car.x = W() - car.w;
 
-  // Update scoreboard
-  scoreboard.textContent = `Score: ${score} | Time: ${timer}`;
+  updateScoreboard();
 }
 
-// Spawn enemies (normal and special)
 function spawnEnemy() {
   const size = W() * 0.08;
   if (Math.random() < 0.15) {
-    // spawn special enemy
     specialEnemies.push({
       x: Math.random() * (W() - size),
       y: -size,
@@ -212,7 +218,6 @@ function spawnEnemy() {
   }
 }
 
-// Bullet shoot function
 function shootBullet() {
   const bulletW = W() * 0.015;
   const bulletH = H() * 0.04;
@@ -224,7 +229,7 @@ function shootBullet() {
   });
 }
 
-// Powers - Example: temporary faster shooting
+// Powers - temporary faster shooting & color change
 let powerActive = false;
 let powerTimeout = null;
 function activatePower() {
@@ -232,7 +237,7 @@ function activatePower() {
     clearTimeout(powerTimeout);
   } else {
     powerActive = true;
-    car.color = '#ff0'; // change car color while powered
+    car.color = '#ff0'; // bright yellow
   }
   powerTimeout = setTimeout(() => {
     powerActive = false;
@@ -240,69 +245,29 @@ function activatePower() {
   }, 8000);
 }
 
-// Touch Controls - support multi-touch: move car at bottom 25% of screen, shoot anywhere else
+// Touch controls with drag on car and tap to shoot anywhere else
 canvas.addEventListener('touchstart', e => {
   for (let touch of e.changedTouches) {
-    activeTouches[touch.identifier] = {
-      x: touch.clientX,
-      y: touch.clientY
-    };
-    if (touch.clientY < H() * 0.75) {
+    const tx = touch.clientX;
+    const ty = touch.clientY;
+
+    // Check if touch started on the car area (including some margin)
+    if (tx >= car.x && tx <= car.x + car.w && ty >= car.y && ty <= car.y + car.h) {
+      touchIdForCar = touch.identifier;
+      car.dragging = true;
+      car.dragOffsetX = tx - car.x;
+      car.opacity = 0.7; // show translucent while dragging
+    } else {
       shootBullet();
-    } 
+    }
   }
   e.preventDefault();
 }, { passive: false });
 
 canvas.addEventListener('touchmove', e => {
   for (let touch of e.changedTouches) {
-    if (touch.clientY > H() * 0.75) {
-      car.x = touch.clientX - car.w / 2;
-      if (car.x < 0) car.x = 0;
-      if (car.x + car.w > W()) car.x = W() - car.w;
-    }
-    activeTouches[touch.identifier] = {
-      x: touch.clientX,
-      y: touch.clientY
-    };
-  }
-  e.preventDefault();
-}, { passive: false });
-
-canvas.addEventListener('touchend', e => {
-  for (let touch of e.changedTouches) {
-    delete activeTouches[touch.identifier];
-  }
-  e.preventDefault();
-}, { passive: false });
-
-// Keyboard controls for desktop
-document.addEventListener('keydown', e => {
-  if (e.key === 'ArrowLeft') car.x -= car.speed;
-  if (e.key === 'ArrowRight') car.x += car.speed;
-  if (e.key === ' ') shootBullet();
-});
-
-// Spawn enemies and game timer
-setInterval(update, 1000 / 60);
-setInterval(spawnEnemy, 900);
-setInterval(() => {
-  timer--;
-  if (timer <= 0) {
-    alert(`Time's up! Your score: ${score}`);
-    timer = 60;
-    score = 0;
-    enemies = [];
-    specialEnemies = [];
-    bullets = [];
-  }
-}, 1000);
-
-// Utility: random bright colors for special enemies
-function getRandomColor() {
-  const colors = ['#ff4500', '#1e90ff', '#ff69b4', '#00ffff', '#ffa500'];
-  return colors[Math.floor(Math.random() * colors.length)];
-}
-</script>
-</body>
-</html>
+    if (touch.identifier === touchIdForCar && car.dragging) {
+      let newX = touch.clientX - car.dragOffsetX;
+      // clamp inside screen
+      if (newX < 0) newX = 0;
+      if (newX
