@@ -44,7 +44,7 @@
       width: 40,
       height: 40,
       color: "cyan",
-      speed: 10
+      speed: 15
     };
 
     const bullets = [];
@@ -52,6 +52,7 @@
     let score = 0;
     let timeLeft = 60;
     let gameInterval, timerInterval;
+    let obstacleInterval;
 
     function drawPlayer() {
       ctx.fillStyle = player.color;
@@ -78,13 +79,14 @@
     }
 
     function moveBullets() {
-      bullets.forEach(b => b.y -= 8);
+      bullets.forEach(b => b.y -= 10);
       for (let i = bullets.length - 1; i >= 0; i--) {
         if (bullets[i].y < 0) bullets.splice(i, 1);
       }
     }
 
     function spawnObstacle() {
+      if (obstacles.length > 50) return;
       const size = 20 + Math.random() * 20;
       obstacles.push({
         x: Math.random() * (canvas.width - size),
@@ -95,7 +97,7 @@
     }
 
     function moveObstacles() {
-      obstacles.forEach(ob => ob.y += 4);
+      obstacles.forEach(ob => ob.y += 5);
       for (let i = obstacles.length - 1; i >= 0; i--) {
         if (obstacles[i].y > canvas.height) obstacles.splice(i, 1);
       }
@@ -133,6 +135,9 @@
     }
 
     function startGame() {
+      clearInterval(gameInterval);
+      clearInterval(timerInterval);
+      clearInterval(obstacleInterval);
       gameInterval = setInterval(gameLoop, 1000 / 60);
       timerInterval = setInterval(() => {
         timeLeft--;
@@ -140,10 +145,11 @@
         if (timeLeft <= 0) {
           clearInterval(gameInterval);
           clearInterval(timerInterval);
+          clearInterval(obstacleInterval);
           alert("Game Over! Your score: " + score);
         }
       }, 1000);
-      setInterval(spawnObstacle, 800);
+      obstacleInterval = setInterval(spawnObstacle, 500);
     }
 
     let moving = false;
