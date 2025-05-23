@@ -12,35 +12,22 @@
     }
     canvas {
       display: block;
-      margin-left: 100px;
-      background-image: url('starry_background.png');
-      background-size: cover;
+      background: black;
     }
     #scoreboard {
       position: absolute;
-      left: 0;
-      top: 0;
-      width: 100px;
-      height: 100%;
-      background: rgba(0,0,0,0.8);
+      top: 10px;
+      left: 10px;
       color: white;
       font-family: Arial, sans-serif;
+      background: rgba(0,0,0,0.5);
       padding: 10px;
-      box-sizing: border-box;
-    }
-    #scoreboard h2 {
-      font-size: 16px;
-      margin-top: 0;
-      text-align: center;
-    }
-    #scoreboard div {
-      margin: 10px 0;
+      border-radius: 5px;
     }
   </style>
 </head>
 <body>
   <div id="scoreboard">
-    <h2>KaKaReza<br>Shooting Game</h2>
     <div id="score">Score: 0</div>
     <div id="missed">Missed: 0</div>
     <div id="level">Level: 1</div>
@@ -52,22 +39,21 @@
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
 
-    let width = window.innerWidth - 100;
+    let width = window.innerWidth;
     let height = window.innerHeight;
     canvas.width = width;
     canvas.height = height;
 
-    // Load assets
     const player = {
       x: width / 2,
-      y: height - 80,
+      y: height - 50,
       width: 40,
       height: 40,
       color: "cyan",
       speed: 15,
       bullets: [],
-      fireRate: 100,
       canFire: true,
+      fireRate: 100,
       powerLevel: 1,
       fireCount: 0
     };
@@ -79,14 +65,12 @@
     let obstacles = [];
     let interval;
     let gameOver = false;
-    let boss = null;
     const maxMisses = 10;
     const levelData = {
       1: { total: 110, speed: 3 },
       2: { total: 110, speed: 4 },
       3: { total: 110, speed: 5 },
-      4: { total: 110, speed: 6 },
-      5: { total: 1, boss: true }
+      4: { total: 110, speed: 6 }
     };
 
     function createObstacle() {
@@ -95,19 +79,7 @@
       const y = -size;
       const speed = levelData[level]?.speed || 4;
       const color = ["red", "yellow", "orange", "green", "blue"][Math.floor(Math.random()*5)];
-      obstacles.push({ x, y, size, speed, color, hit: 0 });
-    }
-
-    function createBoss() {
-      boss = {
-        x: width / 2 - 50,
-        y: 50,
-        width: 100,
-        height: 100,
-        hitPoints: 300,
-        directionX: 2,
-        directionY: 1.5
-      };
+      obstacles.push({ x, y, size, speed, color });
     }
 
     function drawPlayer() {
@@ -127,25 +99,15 @@
       });
     }
 
-    function drawBoss() {
-      if (boss) {
-        ctx.fillStyle = "purple";
-        ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
-      }
-    }
-
     function updateGame() {
       ctx.clearRect(0, 0, width, height);
       drawPlayer();
       drawBullets();
       drawObstacles();
-      if (boss) drawBoss();
 
-      // Update bullets
       player.bullets = player.bullets.filter(b => b.y > 0);
       player.bullets.forEach(b => b.y -= 10);
 
-      // Move obstacles
       obstacles.forEach(o => o.y += o.speed);
       obstacles = obstacles.filter(o => {
         if (o.y > height) {
@@ -157,7 +119,6 @@
         return true;
       });
 
-      // Check collisions
       player.bullets.forEach((b, bi) => {
         obstacles.forEach((o, oi) => {
           if (b.x > o.x && b.x < o.x + o.size && b.y < o.y + o.size && b.y > o.y) {
@@ -168,26 +129,7 @@
             if (player.fireCount % 5 === 0 && player.powerLevel < 3) player.powerLevel++;
           }
         });
-
-        if (boss && b.x > boss.x && b.x < boss.x + boss.width && b.y < boss.y + boss.height && b.y > boss.y) {
-          player.bullets.splice(bi, 1);
-          boss.hitPoints--;
-          if (boss.hitPoints <= 0) {
-            boss = null;
-            level++;
-            timer = 30;
-            startLevel();
-          }
-        }
       });
-
-      // Move boss
-      if (boss) {
-        boss.x += boss.directionX;
-        boss.y += boss.directionY;
-        if (boss.x <= 0 || boss.x + boss.width >= width) boss.directionX *= -1;
-        if (boss.y <= 0 || boss.y + boss.height >= height / 2) boss.directionY *= -1;
-      }
     }
 
     function fireBullets() {
@@ -218,29 +160,23 @@
 
     function startLevel() {
       updateUI();
-      if (level === 5) {
-        createBoss();
-      } else {
-        interval = setInterval(() => {
-          if (levelData[level]?.total > 0) {
-            createObstacle();
-            levelData[level].total--;
-          } else {
-            clearInterval(interval);
-          }
-        }, 500);
-      }
+      interval = setInterval(() => {
+        if (levelData[level]?.total > 0) {
+          createObstacle();
+          levelData[level].total--;
+        } else {
+          clearInterval(interval);
+        }
+      }, 500);
 
       const timerInterval = setInterval(() => {
         if (--timer <= 0) {
           clearInterval(timerInterval);
-          if (!boss) {
-            level++;
-            if (level > 5) endGame();
-            else {
-              timer = 30;
-              startLevel();
-            }
+          level++;
+          if (level > 4) endGame();
+          else {
+            timer = 30;
+            startLevel();
           }
         }
         document.getElementById("timer").textContent = "Time: " + timer;
@@ -255,7 +191,7 @@
 
     canvas.addEventListener("touchstart", (e) => {
       const touch = e.touches[0];
-      const x = touch.clientX - 100; // compensate for scoreboard
+      const x = touch.clientX;
       const y = touch.clientY;
       fireBullets();
       if (x > 0 && y > height - 100) {
@@ -266,7 +202,7 @@
     canvas.addEventListener("touchmove", (e) => {
       e.preventDefault();
       const touch = e.touches[0];
-      const x = touch.clientX - 100;
+      const x = touch.clientX;
       if (x > 0) {
         player.x = x - player.width / 2;
       }
