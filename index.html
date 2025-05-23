@@ -1,144 +1,173 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>KaKaReza Game</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <style>
-    html, body {
-      margin: 0; padding: 0; height: 100%; overflow: hidden; background: black;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      user-select: none;
-      -webkit-tap-highlight-color: transparent;
-    }
-    canvas {
-      display: block;
-      background: #000;
-      width: 100vw;
-      height: 100dvh;
-      touch-action: none;
-    }
-    #scoreboard {
-      position: fixed;
-      top: 15px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 12px;
-      padding: 8px 20px;
-      color: white;
-      font-weight: bold;
-      font-size: 26px;
-      letter-spacing: 2px;
-      user-select: none;
-      pointer-events: none;
-      text-shadow:
-        0 0 8px #00ff00,
-        0 0 12px #00ff00,
-        0 0 20px #00ff00;
-      font-family: 'Orbitron', monospace;
-      z-index: 10;
-      min-width: 160px;
-      text-align: center;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KaKaReza Shooting Game</title>
+<style>
+  body, html {
+    margin: 0; padding: 0; overflow: hidden;
+    background: #111;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  canvas {
+    display: block;
+    background: #222;
+    margin: 0 auto;
+  }
+  #scoreboard {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #0f0;
+    font-family: monospace;
+    font-size: 24px;
+    font-weight: bold;
+    text-shadow: 0 0 5px #0f0;
+    user-select: none;
+    pointer-events: none;
+  }
+</style>
 </head>
 <body>
-
-<div id="scoreboard">Score: 0 | Time: 60</div>
-<canvas id="gameCanvas"></canvas>
-
+<div id="scoreboard">Score: 0</div>
+<canvas id="game"></canvas>
 <script>
-const canvas = document.getElementById('gameCanvas');
+const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+
+function W() { return window.innerWidth; }
+function H() { return window.innerHeight; }
+canvas.width = W();
+canvas.height = H();
+
+let score = 0;
 const scoreboard = document.getElementById('scoreboard');
 
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
-
-let W = () => canvas.width;
-let H = () => canvas.height;
-
-// Game state
-let car = {
-  w: W() * 0.18, // wider for easier finger tracking
-  h: H() * 0.07,
-  x: W() * 0.41,
-  y: H() - H() * 0.15,
-  speed: W() * 0.02,
-  color: '#0f0',
+const car = {
+  x: W()/2 - 40,
+  y: H() - 120,
+  w: 80,
+  h: 120,
   dragging: false,
   dragOffsetX: 0,
-  opacity: 1,
+  opacity: 1
 };
 
 let bullets = [];
 let enemies = [];
 let specialEnemies = [];
-let score = 0;
-let timer = 60;
 
 let touchIdForCar = null;
+let targetCarX = car.x;
 
-// Car looks like an attack tool - spaceship style, now wider
+const dragSpeedMultiplier = 3;
+
+// Shoot bullet function
+function shootBullet() {
+  bullets.push({
+    x: car.x + car.w/2 - 5,
+    y: car.y - 20,
+    w: 10,
+    h: 20,
+    color: '#ff0'
+  });
+}
+
+// Draw the car as a futuristic attack tool (wider base, cannon on top)
 function drawCar() {
   ctx.save();
   ctx.globalAlpha = car.opacity;
-  ctx.translate(car.x + car.w / 2, car.y + car.h / 2);
-
-  // Body
-  ctx.fillStyle = car.color;
+  ctx.fillStyle = '#0af';
+  // Wider base
+  ctx.fillRect(car.x, car.y + car.h*0.5, car.w, car.h*0.5);
+  // Cockpit shape
+  ctx.fillStyle = '#08f';
   ctx.beginPath();
-  ctx.moveTo(-car.w/2, car.h/2);
-  ctx.lineTo(car.w/2, car.h/2);
-  ctx.lineTo(car.w/3, -car.h/2);
-  ctx.lineTo(-car.w/3, -car.h/2);
+  ctx.moveTo(car.x + car.w*0.1, car.y + car.h*0.5);
+  ctx.lineTo(car.x + car.w*0.5, car.y);
+  ctx.lineTo(car.x + car.w*0.9, car.y + car.h*0.5);
   ctx.closePath();
   ctx.fill();
-
-  // Cockpit
-  ctx.fillStyle = '#0ff';
-  ctx.beginPath();
-  ctx.ellipse(0, -car.h/4, car.w/6, car.h/8, 0, 0, Math.PI * 2);
-  ctx.fill();
-
+  // Cannon nozzle (center top)
+  ctx.fillStyle = '#ff0';
+  ctx.fillRect(car.x + car.w/2 - 5, car.y - 20, 10, 20);
   ctx.restore();
-  ctx.globalAlpha = 1;
 }
 
+// Draw bullets
 function drawBullets() {
-  ctx.fillStyle = '#ff4040';
-  bullets.forEach(b => ctx.fillRect(b.x, b.y, b.w, b.h));
+  bullets.forEach(b => {
+    ctx.fillStyle = b.color;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+  });
 }
 
+// Draw enemies (red squares) and special enemies (glowing orange squares)
 function drawEnemies() {
   enemies.forEach(e => {
-    ctx.fillStyle = '#0f0'; // normal enemies - green
+    ctx.fillStyle = '#f33';
     ctx.fillRect(e.x, e.y, e.w, e.h);
   });
   specialEnemies.forEach(se => {
-    // special enemies with bright glowing color
-    let gradient = ctx.createRadialGradient(se.x + se.w / 2, se.y + se.h / 2, se.w/4, se.x + se.w / 2, se.y + se.h / 2, se.w);
-    gradient.addColorStop(0, se.color);
-    gradient.addColorStop(1, 'transparent');
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(se.x + se.w / 2, se.y + se.h / 2, se.w / 2, 0, 2 * Math.PI);
-    ctx.fill();
+    const glowColor = 'orange';
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = 15;
+    ctx.fillStyle = glowColor;
+    ctx.fillRect(se.x, se.y, se.w, se.h);
+    ctx.shadowBlur = 0;
   });
 }
 
-// Update score board visually
+// Update scoreboard text
 function updateScoreboard() {
-  scoreboard.textContent = `Score: ${score} | Time: ${timer}`;
+  scoreboard.textContent = `Score: ${score}`;
 }
 
+// Activate special power (for demo, increase score + quick flash)
+function activatePower() {
+  score += 100;
+  // Flash screen effect
+  canvas.style.background = '#ffa500';
+  setTimeout(() => {
+    canvas.style.background = '#222';
+  }, 100);
+}
+
+// Spawn enemies randomly
+function spawnEnemy() {
+  enemies.push({
+    x: Math.random() * (W() - 40),
+    y: -40,
+    w: 40,
+    h: 40
+  });
+}
+
+// Spawn special enemies randomly
+function spawnSpecialEnemy() {
+  specialEnemies.push({
+    x: Math.random() * (W() - 40),
+    y: -40,
+    w: 40,
+    h: 40
+  });
+}
+
+// Game loop
 function update() {
   ctx.clearRect(0, 0, W(), H());
+
+  // Smoothly update car position toward targetX with speed multiplier
+  let dx = targetCarX - car.x;
+  car.x += dx * 0.3 * dragSpeedMultiplier;
+
+  // Clamp inside screen
+  if (car.x < 0) car.x = 0;
+  if (car.x + car.w > W()) car.x = W() - car.w;
 
   drawCar();
   drawBullets();
@@ -185,86 +214,34 @@ function update() {
       ) {
         bullets.splice(bi, 1);
         specialEnemies.splice(sei, 1);
-        score += 50;
         activatePower();
       }
     });
   });
 
-  // Keep car inside boundaries
-  if (car.x < 0) car.x = 0;
-  if (car.x + car.w > W()) car.x = W() - car.w;
-
   updateScoreboard();
+
+  requestAnimationFrame(update);
 }
 
-function spawnEnemy() {
-  const size = W() * 0.08;
-  if (Math.random() < 0.15) {
-    specialEnemies.push({
-      x: Math.random() * (W() - size),
-      y: -size,
-      w: size,
-      h: size,
-      color: getRandomColor(),
-    });
-  } else {
-    enemies.push({
-      x: Math.random() * (W() - size),
-      y: -size,
-      w: size,
-      h: size,
-    });
-  }
-}
+// Touch event handlers for moving & firing
 
-function shootBullet() {
-  const bulletW = W() * 0.015;
-  const bulletH = H() * 0.04;
-  bullets.push({
-    x: car.x + car.w / 2 - bulletW / 2,
-    y: car.y,
-    w: bulletW,
-    h: bulletH
-  });
-}
-
-// Powers - temporary faster shooting & color change
-let powerActive = false;
-let powerTimeout = null;
-function activatePower() {
-  if (powerActive) {
-    clearTimeout(powerTimeout);
-  } else {
-    powerActive = true;
-    car.color = '#ff0'; // bright yellow
-  }
-  powerTimeout = setTimeout(() => {
-    powerActive = false;
-    car.color = '#0f0';
-  }, 8000);
-}
-
-// Random bright colors for special enemies
-function getRandomColor() {
-  const colors = ['#ff00ff', '#00ffff', '#ffff00', '#ff5500', '#00ff88'];
-  return colors[Math.floor(Math.random() * colors.length)];
-}
-
-// Touch controls with drag on car and tap to shoot anywhere else
 canvas.addEventListener('touchstart', e => {
   for (let touch of e.changedTouches) {
     const tx = touch.clientX;
     const ty = touch.clientY;
 
-    // Check if touch started on the car area (including some margin)
-    if (tx >= car.x && tx <= car.x + car.w && ty >= car.y && ty <= car.y + car.h) {
+    const isOnCar = (tx >= car.x && tx <= car.x + car.w && ty >= car.y && ty <= car.y + car.h);
+
+    if (isOnCar) {
       touchIdForCar = touch.identifier;
       car.dragging = true;
       car.dragOffsetX = tx - car.x;
-      car.opacity = 0.7; // show translucent while dragging
+      car.opacity = 0.7;
+      shootBullet(); // Fire bullet immediately when tapping on car
+      targetCarX = car.x; // reset target position
     } else {
-      shootBullet();
+      shootBullet(); // Fire bullet anywhere else
     }
   }
   e.preventDefault();
@@ -273,11 +250,10 @@ canvas.addEventListener('touchstart', e => {
 canvas.addEventListener('touchmove', e => {
   for (let touch of e.changedTouches) {
     if (touch.identifier === touchIdForCar && car.dragging) {
-      let newX = touch.clientX - car.dragOffsetX;
-      // clamp inside screen
-      if (newX < 0) newX = 0;
-      if (newX + car.w > W()) newX = W() - car.w;
-      car.x = newX;
+      let newTargetX = touch.clientX - car.dragOffsetX;
+      if (newTargetX < 0) newTargetX = 0;
+      if (newTargetX + car.w > W()) newTargetX = W() - car.w;
+      targetCarX = newTargetX;
     }
   }
   e.preventDefault();
@@ -294,68 +270,13 @@ canvas.addEventListener('touchend', e => {
   e.preventDefault();
 }, { passive: false });
 
-// Optional: mouse controls for desktop testing
-canvas.addEventListener('mousedown', e => {
-  const mx = e.clientX;
-  const my = e.clientY;
-  if (mx >= car.x && mx <= car.x + car.w && my >= car.y && my <= car.y + car.h) {
-    car.dragging = true;
-    car.dragOffsetX = mx - car.x;
-    car.opacity = 0.7;
-  } else {
-    shootBullet();
-  }
-});
-canvas.addEventListener('mousemove', e => {
-  if (car.dragging) {
-    let newX = e.clientX - car.dragOffsetX;
-    if (newX < 0) newX = 0;
-    if (newX + car.w > W()) newX = W() - car.w;
-    car.x = newX;
-  }
-});
-canvas.addEventListener('mouseup', e => {
-  if (car.dragging) {
-    car.dragging = false;
-    car.opacity = 1;
-  }
-});
+// Spawning enemies continuously every 1.5 seconds, specials every 6 seconds
+setInterval(spawnEnemy, 1500);
+setInterval(spawnSpecialEnemy, 6000);
 
-// Game loop and timer
-let spawnInterval = setInterval(spawnEnemy, 1100);
-let timerInterval = setInterval(() => {
-  timer--;
-  if (timer <= 0) {
-    clearInterval(timerInterval);
-    clearInterval(spawnInterval);
-    alert("Game Over! Your score: " + score);
-    // reset game (optional)
-    score = 0;
-    timer = 60;
-    bullets = [];
-    enemies = [];
-    specialEnemies = [];
-    updateScoreboard();
-    spawnInterval = setInterval(spawnEnemy, 1100);
-    timerInterval = setInterval(() => {
-      timer--;
-      if (timer <= 0) {
-        clearInterval(timerInterval);
-        clearInterval(spawnInterval);
-        alert("Game Over! Your score: " + score);
-      }
-      updateScoreboard();
-    }, 1000);
-  }
-  updateScoreboard();
-}, 1000);
+// Start game loop
+update();
 
-function gameLoop() {
-  update();
-  requestAnimationFrame(gameLoop);
-}
-gameLoop();
 </script>
-
 </body>
 </html>
