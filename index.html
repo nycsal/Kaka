@@ -1,217 +1,220 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>KaKaReza Shooting Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <style>
-    body {
+    html, body {
       margin: 0;
+      padding: 0;
       overflow: hidden;
       background: black;
-    }
-    canvas {
-      display: block;
-      background: black;
+      touch-action: none;
+      user-select: none;
     }
     #scoreboard {
       position: absolute;
       top: 10px;
       left: 10px;
       color: white;
+      font-size: 18px;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 8px;
+      border-radius: 10px;
       font-family: Arial, sans-serif;
-      background: rgba(0,0,0,0.5);
-      padding: 10px;
-      border-radius: 5px;
+    }
+    #title {
+      position: absolute;
+      top: 70px;
+      left: 10px;
+      color: #ffcc00;
+      font-size: 20px;
+      font-family: fantasy;
     }
   </style>
 </head>
 <body>
-  <div id="scoreboard">
-    <div id="score">Score: 0</div>
-    <div id="missed">Missed: 0</div>
-    <div id="level">Level: 1</div>
-    <div id="timer">Time: 30</div>
-  </div>
-  <canvas id="gameCanvas"></canvas>
+<canvas id="gameCanvas"></canvas>
+<div id="scoreboard">Score: 0 | Level: 1 | Time: 30</div>
+<div id="title">KaKaReza Shooting Game</div>
 
-  <script>
-    const canvas = document.getElementById("gameCanvas");
-    const ctx = canvas.getContext("2d");
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
 
-    let width = window.innerWidth;
-    let height = window.innerHeight;
-    canvas.width = width;
-    canvas.height = height;
+let cw = window.innerWidth;
+let ch = window.innerHeight;
+canvas.width = cw;
+canvas.height = ch;
 
-    const player = {
-      x: width / 2,
-      y: height - 50,
-      width: 40,
-      height: 40,
-      color: "cyan",
-      speed: 15,
-      bullets: [],
-      canFire: true,
-      fireRate: 100,
-      powerLevel: 1,
-      fireCount: 0
-    };
+let player = { x: cw / 2, y: ch - 60, width: 60, height: 30, color: "lime", speed: 8 };
+let bullets = [];
+let obstacles = [];
+let score = 0;
+let level = 1;
+let time = 30;
+let missed = 0;
+let maxMiss = 9;
+let totalObstacles = 0;
+let keys = {};
+let firing = false;
+let fireInterval;
+let lastTouchX = player.x;
 
-    let score = 0;
-    let missed = 0;
-    let level = 1;
-    let timer = 30;
-    let obstacles = [];
-    let interval;
-    let gameOver = false;
-    const maxMisses = 10;
-    const levelData = {
-      1: { total: 110, speed: 3 },
-      2: { total: 110, speed: 4 },
-      3: { total: 110, speed: 5 },
-      4: { total: 110, speed: 6 }
-    };
+function spawnObstacle() {
+  const size = 30;
+  const x = Math.random() * (cw - size);
+  const colorTypes = ["red", "orange", "cyan", "magenta"];
+  const color = colorTypes[Math.floor(Math.random() * colorTypes.length)];
+  obstacles.push({ x, y: -size, size, color });
+  totalObstacles++;
+}
 
-    function createObstacle() {
-      const size = 30;
-      const x = Math.random() * (width - size);
-      const y = -size;
-      const speed = levelData[level]?.speed || 4;
-      const color = ["red", "yellow", "orange", "green", "blue"][Math.floor(Math.random()*5)];
-      obstacles.push({ x, y, size, speed, color });
+function drawPlayer() {
+  ctx.fillStyle = player.color;
+  ctx.beginPath();
+  ctx.moveTo(player.x, player.y);
+  ctx.lineTo(player.x - 15, player.y + player.height);
+  ctx.lineTo(player.x + 15, player.y + player.height);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawBullets() {
+  ctx.fillStyle = "yellow";
+  bullets.forEach(b => ctx.fillRect(b.x - 2, b.y, 4, 10));
+}
+
+function drawObstacles() {
+  obstacles.forEach(o => {
+    ctx.fillStyle = o.color;
+    ctx.fillRect(o.x, o.y, o.size, o.size);
+  });
+}
+
+function updateBullets() {
+  bullets = bullets.filter(b => b.y > -10);
+  bullets.forEach(b => b.y -= 10);
+}
+
+function updateObstacles() {
+  obstacles.forEach(o => o.y += 3 + level);
+  obstacles = obstacles.filter(o => {
+    if (o.y > ch) {
+      missed++;
+      return false;
     }
+    return true;
+  });
+}
 
-    function drawPlayer() {
-      ctx.fillStyle = player.color;
-      ctx.fillRect(player.x, player.y, player.width, player.height);
-    }
-
-    function drawBullets() {
-      ctx.fillStyle = "lime";
-      player.bullets.forEach((b) => ctx.fillRect(b.x, b.y, 5, 15));
-    }
-
-    function drawObstacles() {
-      obstacles.forEach((o) => {
-        ctx.fillStyle = o.color;
-        ctx.fillRect(o.x, o.y, o.size, o.size);
-      });
-    }
-
-    function updateGame() {
-      ctx.clearRect(0, 0, width, height);
-      drawPlayer();
-      drawBullets();
-      drawObstacles();
-
-      player.bullets = player.bullets.filter(b => b.y > 0);
-      player.bullets.forEach(b => b.y -= 10);
-
-      obstacles.forEach(o => o.y += o.speed);
-      obstacles = obstacles.filter(o => {
-        if (o.y > height) {
-          missed++;
-          updateUI();
-          if (missed >= maxMisses) endGame();
-          return false;
-        }
-        return true;
-      });
-
-      player.bullets.forEach((b, bi) => {
-        obstacles.forEach((o, oi) => {
-          if (b.x > o.x && b.x < o.x + o.size && b.y < o.y + o.size && b.y > o.y) {
-            player.bullets.splice(bi, 1);
-            obstacles.splice(oi, 1);
-            score++;
-            player.fireCount++;
-            if (player.fireCount % 5 === 0 && player.powerLevel < 3) player.powerLevel++;
-          }
-        });
-      });
-    }
-
-    function fireBullets() {
-      if (!player.canFire) return;
-      player.canFire = false;
-      const midX = player.x + player.width / 2;
-      const baseY = player.y;
-
-      if (player.powerLevel === 1) {
-        player.bullets.push({ x: midX, y: baseY });
-      } else if (player.powerLevel === 2) {
-        player.bullets.push({ x: midX - 10, y: baseY });
-        player.bullets.push({ x: midX + 10, y: baseY });
-      } else {
-        player.bullets.push({ x: midX, y: baseY });
-        player.bullets.push({ x: midX - 15, y: baseY });
-        player.bullets.push({ x: midX + 15, y: baseY });
-      }
-
-      setTimeout(() => player.canFire = true, player.fireRate);
-    }
-
-    function updateUI() {
-      document.getElementById("score").textContent = "Score: " + score;
-      document.getElementById("missed").textContent = "Missed: " + missed;
-      document.getElementById("level").textContent = "Level: " + level;
-    }
-
-    function startLevel() {
-      updateUI();
-      interval = setInterval(() => {
-        if (levelData[level]?.total > 0) {
-          createObstacle();
-          levelData[level].total--;
-        } else {
-          clearInterval(interval);
-        }
-      }, 500);
-
-      const timerInterval = setInterval(() => {
-        if (--timer <= 0) {
-          clearInterval(timerInterval);
-          level++;
-          if (level > 4) endGame();
-          else {
-            timer = 30;
-            startLevel();
-          }
-        }
-        document.getElementById("timer").textContent = "Time: " + timer;
-      }, 1000);
-    }
-
-    function endGame() {
-      gameOver = true;
-      alert("Game Over! Final Score: " + score);
-      location.reload();
-    }
-
-    canvas.addEventListener("touchstart", (e) => {
-      const touch = e.touches[0];
-      const x = touch.clientX;
-      const y = touch.clientY;
-      fireBullets();
-      if (x > 0 && y > height - 100) {
-        player.x = x - player.width / 2;
+function checkCollisions() {
+  bullets.forEach((b, bi) => {
+    obstacles.forEach((o, oi) => {
+      if (b.x > o.x && b.x < o.x + o.size && b.y < o.y + o.size && b.y > o.y) {
+        bullets.splice(bi, 1);
+        obstacles.splice(oi, 1);
+        score++;
+        // Power-up
+        if (o.color === "cyan") fireRate = 80;
+        if (o.color === "magenta") fireRate = 50;
       }
     });
+  });
+}
 
-    canvas.addEventListener("touchmove", (e) => {
-      e.preventDefault();
-      const touch = e.touches[0];
-      const x = touch.clientX;
-      if (x > 0) {
-        player.x = x - player.width / 2;
-      }
-    }, { passive: false });
+function drawScoreboard() {
+  document.getElementById("scoreboard").innerText = `Score: ${score} | Level: ${level} | Time: ${time}`;
+}
 
-    startLevel();
-    setInterval(() => {
-      if (!gameOver) updateGame();
-    }, 30);
-  </script>
+function shootBullet() {
+  bullets.push({ x: player.x, y: player.y });
+}
+
+let fireRate = 100;
+function startFiring() {
+  if (!firing) {
+    firing = true;
+    shootBullet();
+    fireInterval = setInterval(shootBullet, fireRate);
+  }
+}
+function stopFiring() {
+  firing = false;
+  clearInterval(fireInterval);
+}
+
+function levelUp() {
+  if (level < 4) {
+    level++;
+    time = 30;
+    totalObstacles = 0;
+  } else {
+    alert("You Win!");
+    resetGame();
+  }
+}
+
+function resetGame() {
+  score = 0;
+  level = 1;
+  time = 30;
+  missed = 0;
+  obstacles = [];
+  bullets = [];
+  totalObstacles = 0;
+}
+
+function gameLoop() {
+  ctx.clearRect(0, 0, cw, ch);
+  drawPlayer();
+  drawBullets();
+  drawObstacles();
+  drawScoreboard();
+  updateBullets();
+  updateObstacles();
+  checkCollisions();
+
+  if (missed > maxMiss) {
+    alert("Game Over!");
+    resetGame();
+  }
+
+  if (totalObstacles < 110) {
+    if (Math.random() < 0.04) spawnObstacle();
+  } else if (score >= 100) {
+    levelUp();
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+setInterval(() => {
+  time--;
+  if (time <= 0) {
+    if (score >= 100) levelUp();
+    else {
+      alert("Time's up! Game Over!");
+      resetGame();
+    }
+  }
+}, 1000);
+
+// Touch Controls
+canvas.addEventListener("touchstart", e => {
+  const touch = e.touches[0];
+  lastTouchX = touch.clientX;
+  startFiring();
+});
+canvas.addEventListener("touchend", stopFiring);
+canvas.addEventListener("touchmove", e => {
+  const touch = e.touches[0];
+  player.x = touch.clientX;
+  if (player.x < 30) player.x = 30;
+  if (player.x > cw - 30) player.x = cw - 30;
+});
+
+gameLoop();
+</script>
 </body>
 </html>
