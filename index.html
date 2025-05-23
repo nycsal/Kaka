@@ -2,31 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>KaKaReza Shooting Game</title>
+  <title>KaKaReza Shooting Game – Feature Build</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { overflow: hidden; background: #000; font-family: Arial, sans-serif; }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { overflow:hidden; background:#000; font-family:Arial,sans-serif; }
     /* Top scoreboard bar */
     #scoreboard {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 80px;
-      background: rgba(0,0,0,0.9);
-      color: #0f0;
-      display: flex;
-      align-items: center;
-      justify-content: space-around;
-      user-select: none;
-      font-size: 18px;
+      position:fixed; top:0; left:0;
+      width:100%; height:80px;
+      background:rgba(0,0,0,0.9);
+      color:#0f0;
+      display:flex; align-items:center; justify-content:space-around;
+      font-size:18px; user-select:none;
     }
-    #scoreboard h3 { margin: 0; font-size: 24px; }
-    /* Game canvas below the scoreboard */
+    #scoreboard h3 { margin:0; font-size:24px; }
     canvas {
-      position: absolute;
-      top: 80px; left: 0;
-      background: #000;
-      touch-action: none;
+      position:absolute; top:80px; left:0;
+      background:#000; touch-action:none;
     }
   </style>
 </head>
@@ -41,181 +34,278 @@
   <canvas id="gameCanvas"></canvas>
 
   <script>
-    // — Setup & Resize —
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    const HEADER = 80;
-    function resize() {
-      canvas.width  = window.innerWidth;
-      canvas.height = window.innerHeight - HEADER;
-      tank.y = canvas.height - tank.h - 20;
+  // ---- SETUP & RESIZE ----
+  const canvas = document.getElementById('gameCanvas');
+  const ctx    = canvas.getContext('2d');
+  const HEADER = 80;
+  function resize(){
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight - HEADER;
+    tank.y = canvas.height - tank.h - 20;
+  }
+  window.addEventListener('resize', resize);
+
+  // ---- GAME STATE ----
+  const tank = { w:140, h:70, x:0, y:0, speed:12 };
+  tank.x = (window.innerWidth - tank.w)/2;
+  let bullets     = [],
+      obstacles   = [],
+      particles   = [],
+      boss        = null;           // holds boss when active
+
+  let score       = 0,
+      missed      = 0,
+      level       = 1,
+      firePower   = 1,
+      shotsFired  = 0,
+      timeLeft    = 30,
+      baseObstacles = 200,
+      maxMissed   = 10,
+      obstacleSpeed = 2;
+
+  // ---- INPUT ----
+  const keys = {};
+  document.addEventListener('keydown', e=>{
+    if(['ArrowLeft','ArrowRight','a','d'].includes(e.key)){
+      keys[e.key]=true; e.preventDefault();
     }
-    window.addEventListener('resize', resize);
+  });
+  document.addEventListener('keyup', e=>{
+    if(['ArrowLeft','ArrowRight','a','d'].includes(e.key)){
+      keys[e.key]=false; e.preventDefault();
+    }
+  });
+  let dragging=false;
+  canvas.addEventListener('pointerdown', e=>{ dragging=true; updateTank(e); });
+  document.addEventListener('pointerup', ()=>dragging=false);
+  canvas.addEventListener('pointermove', e=>{ if(dragging) updateTank(e); });
+  function updateTank(e){
+    const rect=canvas.getBoundingClientRect();
+    let x=e.clientX-rect.left;
+    tank.x = Math.max(0,Math.min(canvas.width-tank.w, x - tank.w/2));
+  }
 
-    // — Game State —
-    const tank = { w: 140, h: 70, x: 0, y: 0, speed: 12 };
-    tank.x = (window.innerWidth - tank.w) / 2;
-    let bullets = [], obstacles = [];
-    let score=0, missed=0, level=1;
-    let firePower=1, shotsFired=0;
-    let timeLeft=30, baseObstacles=200, maxMissed=10, obstacleSpeed=2;
-
-    // — Input Tracking —
-    const keys = {};
-    document.addEventListener('keydown', e => {
-      if (['ArrowLeft','ArrowRight','a','d'].includes(e.key)) {
-        keys[e.key] = true;
-        e.preventDefault();
-      }
+  // ---- DRAW HELPERS ----
+  function drawTank(){
+    ctx.fillStyle='lime';
+    ctx.fillRect(tank.x, tank.y, tank.w, tank.h);
+  }
+  function drawBullets(){
+    ctx.fillStyle='yellow';
+    bullets.forEach(b=>{
+      ctx.beginPath();
+      ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+      ctx.fill();
     });
-    document.addEventListener('keyup', e => {
-      if (['ArrowLeft','ArrowRight','a','d'].includes(e.key)) {
-        keys[e.key] = false;
-        e.preventDefault();
-      }
+  }
+  function drawObstacles(){
+    obstacles.forEach(o=>{
+      ctx.fillStyle=o.color;
+      ctx.beginPath();
+      ctx.arc(o.x,o.y,o.r,0,Math.PI*2);
+      ctx.fill();
     });
-    // Pointer drag for touch/desktop
-    let dragging = false;
-    canvas.addEventListener('pointerdown', e => { dragging = true; updateTank(e); });
-    document.addEventListener('pointerup', () => dragging = false);
-    canvas.addEventListener('pointermove', e => { if (dragging) updateTank(e); });
-    function updateTank(e) {
-      const rect = canvas.getBoundingClientRect();
-      let x = e.clientX - rect.left;
-      tank.x = Math.max(0, Math.min(canvas.width - tank.w, x - tank.w/2));
-    }
+  }
+  function drawParticles(){
+    particles.forEach((p,i)=>{
+      ctx.globalAlpha = p.life/ p.maxLife;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      p.x += p.vx; p.y += p.vy; p.life--; 
+      if(p.life<=0) particles.splice(i,1);
+    });
+  }
+  function updateScoreboard(){
+    document.getElementById('score').textContent  = score;
+    document.getElementById('level').textContent  = level;
+    document.getElementById('time').textContent   = timeLeft;
+    document.getElementById('missed').textContent = missed;
+  }
 
-    // — Draw Helpers —
-    function drawTank() {
-      ctx.fillStyle = 'lime';
-      ctx.fillRect(tank.x, tank.y, tank.w, tank.h);
-    }
-    function drawBullets() {
-      ctx.fillStyle = 'yellow';
-      bullets.forEach(b => {
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
-        ctx.fill();
-      });
-    }
-    function drawObstacles() {
-      obstacles.forEach(o => {
-        ctx.fillStyle = o.color;
-        ctx.beginPath();
-        ctx.arc(o.x, o.y, o.r, 0, Math.PI*2);
-        ctx.fill();
-      });
-    }
-    function updateScoreboard() {
-      document.getElementById('score').textContent = score;
-      document.getElementById('level').textContent = level;
-      document.getElementById('time').textContent = timeLeft;
-      document.getElementById('missed').textContent = missed;
-    }
+  // ---- CORE LOGIC ----
+  function moveTank(){
+    if(keys['ArrowLeft']||keys['a'])   tank.x-=tank.speed;
+    if(keys['ArrowRight']||keys['d'])  tank.x+=tank.speed;
+    tank.x=Math.max(0,Math.min(canvas.width-tank.w,tank.x));
+  }
 
-    // — Core Logic —
-    function moveTank() {
-      if (keys['ArrowLeft']||keys['a'])   tank.x -= tank.speed;
-      if (keys['ArrowRight']||keys['d'])  tank.x += tank.speed;
-      tank.x = Math.max(0, Math.min(canvas.width - tank.w, tank.x));
+  function fireBullet(){
+    shotsFired++;
+    if(shotsFired%10===0 && firePower<3) firePower++;
+    for(let i=0;i<firePower;i++){
+      const off = (i-(firePower-1)/2)*22;
+      bullets.push({ x: tank.x+tank.w/2+off,
+                     y: tank.y, r:10, speed:14 });
     }
+  }
 
-    function fireBullet() {
-      shotsFired++;
-      if (shotsFired % 10 === 0 && firePower < 4) firePower++;
-      for (let i = 0; i < firePower; i++) {
-        const offset = (i - (firePower-1)/2) * 22;
-        bullets.push({
-          x: tank.x + tank.w/2 + offset,
-          y: tank.y,
-          r: 10,
-          speed: 14
-        });
+  function updateBullets(){
+    bullets = bullets.filter(b=>{
+      b.y -= b.speed;
+      return b.y + b.r > 0;
+    });
+  }
+
+  function spawnObstacle(){
+    // If boss level 3 active, don't spawn regular
+    if(level===3 && boss) return;
+    const color = Math.random()<0.1?'cyan':'red';
+    // size shrinks 15% each level:
+    const baseR = 30 * Math.pow(0.85, level-1);
+    obstacles.push({
+      x: Math.random()*(canvas.width-60)+30,
+      y:-baseR*1.5,
+      r: baseR,
+      color,
+      speed: obstacleSpeed
+    });
+  }
+
+  function updateObstacles(){
+    obstacles = obstacles.filter(o=>{
+      o.y += o.speed;
+      if(o.y - o.r > canvas.height){
+        missed++;
+        return false;
+      }
+      return true;
+    });
+  }
+
+  function detectCollisions(){
+    // bullets <-> obstacles
+    for(let bi=bullets.length-1; bi>=0; bi--){
+      const b = bullets[bi];
+      // Boss hit?
+      if(boss && Math.hypot(b.x-boss.x,b.y-boss.y) < b.r+boss.r){
+        bullets.splice(bi,1);
+        boss.hp--;
+        spawnImpact(b.x,b.y,'white');
+        continue;
+      }
+      // Regular
+      for(let oi=obstacles.length-1; oi>=0; oi--){
+        const o = obstacles[oi];
+        if(Math.hypot(b.x-o.x,b.y-o.y) < b.r+o.r){
+          bullets.splice(bi,1);
+          obstacles.splice(oi,1);
+          spawnImpact(o.x,o.y,o.color);
+          if(o.color==='cyan' && firePower<3) firePower++;
+          score++;
+          break;
+        }
       }
     }
+  }
 
-    function updateBullets() {
-      bullets = bullets.filter(b => {
-        b.y -= b.speed;
-        return b.y + b.r > 0;
+  // create little radial particles for pop
+  function spawnImpact(x,y,color){
+    for(let i=0;i<12;i++){
+      const ang = Math.random()*Math.PI*2;
+      particles.push({
+        x,y,
+        vx:Math.cos(ang)*(2+Math.random()*2),
+        vy:Math.sin(ang)*(2+Math.random()*2),
+        size:2+Math.random()*2,
+        color,
+        life:20+Math.random()*10,
+        maxLife:20
       });
     }
+  }
 
-    function spawnObstacle() {
-      const color = Math.random() < 0.1 ? 'cyan' : 'red';
+  // Boss logic
+  function ensureBoss(){
+    if(level===3 && !boss){
+      boss = {
+        x:canvas.width/2, y:100,
+        r:80,
+        speedX:3,
+        hp:500,
+        fireTimer:0
+      };
+    }
+  }
+  function updateBoss(){
+    if(!boss) return;
+    // move side to side
+    boss.x += boss.speedX;
+    if(boss.x-boss.r<0||boss.x+boss.r>canvas.width) boss.speedX *= -1;
+    // fire every 60 frames
+    if(++boss.fireTimer > 60){
+      boss.fireTimer=0;
+      // boss bullet downward
       obstacles.push({
-        x: Math.random()*(canvas.width-60)+30,
-        y: -50, r: 30, color, speed: obstacleSpeed
+        x: boss.x,
+        y: boss.y+boss.r,
+        r:12,
+        color:'magenta',
+        speed:6,
+        isBossShot:true
       });
     }
-
-    function updateObstacles() {
-      obstacles = obstacles.filter(o => {
-        o.y += o.speed;
-        if (o.y - o.r > canvas.height) {
-          missed++;
-          return false;
-        }
-        return true;
-      });
+    // draw
+    ctx.fillStyle = 'orange';
+    ctx.beginPath();
+    ctx.arc(boss.x,boss.y,boss.r,0,Math.PI*2);
+    ctx.fill();
+    // check defeat
+    if(boss.hp <= 0){
+      boss = null;
+      level = 4;
+      resetLevel();
     }
+  }
 
-    function detectCollisions() {
-      for (let bi = bullets.length-1; bi >= 0; bi--) {
-        for (let oi = obstacles.length-1; oi >= 0; oi--) {
-          const b = bullets[bi], o = obstacles[oi];
-          if (Math.hypot(b.x-o.x, b.y-o.y) < b.r + o.r) {
-            bullets.splice(bi,1);
-            obstacles.splice(oi,1);
-            if (o.color === 'cyan' && firePower < 4) firePower++;
-            score++;
-            break;
-          }
-        }
-      }
+  // ---- MAIN LOOP ----
+  function loop(){
+    moveTank();
+    updateBullets();
+    updateObstacles();
+    detectCollisions();
+    ensureBoss();
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    drawTank();
+    drawBullets();
+    drawObstacles();
+    updateBoss();
+    drawParticles();
+    updateScoreboard();
+    if(missed>=maxMissed){
+      alert(`Game Over! Score: ${score}`);
+      return location.reload();
     }
+    requestAnimationFrame(loop);
+  }
 
-    // — Main Loop —
-    function loop() {
-      moveTank();
-      updateBullets();
-      updateObstacles();
-      detectCollisions();
+  // ---- TIMERS & LEVEL MANAGEMENT ----
+  function resetLevel(){
+    bullets=[]; obstacles=[]; particles=[];
+    shotsFired=0; firePower=1;
+    timeLeft=30;
+    maxMissed = Math.max(1,10-(level-1));
+    baseObstacles = Math.floor(baseObstacles * 1.2);
+    obstacleSpeed += 0.5;
+  }
 
-      ctx.clearRect(0,0,canvas.width,canvas.height);
-      drawTank();
-      drawBullets();
-      drawObstacles();
-      updateScoreboard();
-
-      if (missed >= maxMissed) {
-        alert(`Game Over! Score: ${score}`);
-        return location.reload();
-      }
-      requestAnimationFrame(loop);
+  setInterval(fireBullet,300);
+  setInterval(()=>{
+    if(timeLeft>0) timeLeft--;
+    else {
+      level++;
+      resetLevel();
     }
+  },1000);
+  setInterval(()=>{
+    if(obstacles.length < baseObstacles) spawnObstacle();
+  },300);
 
-    // — Timers & Level Logic —
-    setInterval(fireBullet, 300);
-    setInterval(() => {
-      if (timeLeft > 0) timeLeft--;
-      else {
-        level++;
-        firePower = 1;
-        shotsFired = 0;
-        timeLeft = 30;
-        maxMissed = Math.max(1, 10 - (level - 1));
-        baseObstacles = Math.floor(baseObstacles * 1.2);
-        obstacleSpeed += 0.5;
-      }
-    }, 1000);
-    setInterval(() => {
-      if (obstacles.length < baseObstacles) spawnObstacle();
-    }, 300);
-
-    // — Start Game —
-    resize();
-    loop();
+  // ---- START ----
+  resize();
+  loop();
   </script>
 </body>
 </html>
