@@ -1,213 +1,281 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>KaKaReza Shooting Game</title>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: black;
-      overflow: hidden;
-    }
-
-    canvas {
-      display: block;
-    }
-
-    #scoreboard {
-      color: white;
-      font-family: Arial, sans-serif;
-      font-size: 20px;
-      position: absolute;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      text-align: center;
-      background-color: rgba(0,0,0,0.6);
-      padding: 10px 20px;
-      border-radius: 10px;
-    }
-
-    #scoreboard h1 {
-      margin: 0;
-      font-size: 18px;
-      color: #ffcc00;
-    }
-
-    #scoreboard p {
-      margin: 5px 0 0;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KaKaReza Shooting Game</title>
+<style>
+  body, html {
+    margin: 0; padding: 0; overflow: hidden; background: black; font-family: Arial, sans-serif;
+  }
+  #gameContainer {
+    position: relative;
+    width: 100vw; height: 100vh;
+    display: flex;
+  }
+  #scoreboard {
+    width: 100px;
+    background: #222;
+    color: #0f0;
+    font-size: 20px;
+    padding: 10px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  #scoreboard h2 {
+    margin: 0 0 20px 0;
+    font-family: 'Courier New', Courier, monospace;
+  }
+  #gameCanvas {
+    flex-grow: 1;
+    background: linear-gradient(to bottom, #001022, #000000);
+    display: block;
+  }
+</style>
 </head>
 <body>
+
+<div id="gameContainer">
   <div id="scoreboard">
-    <h1>KaKaReza Shooting Game</h1>
-    <p>Score: <span id="score">0</span></p>
+    <h2>KaKaReza<br>Shooting Game</h2>
+    <div>Score: <span id="score">0</span></div>
+    <div>Time: <span id="time">60</span>s</div>
   </div>
   <canvas id="gameCanvas"></canvas>
-  <script>
-    const canvas = document.getElementById("gameCanvas");
-    const ctx = canvas.getContext("2d");
+</div>
 
-    let width = window.innerWidth;
-    let height = window.innerHeight;
-    canvas.width = width;
-    canvas.height = height;
+<script>
+(() => {
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
 
-    const player = {
-      x: width / 2,
-      y: height - 80,
-      width: 50,
-      height: 30,
-      color: "lime",
-      speed: 10
-    };
+  // Resize canvas to fill remaining width and height
+  function resize() {
+    canvas.width = window.innerWidth - 100; // subtract scoreboard width
+    canvas.height = window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
 
-    let bullets = [];
-    let obstacles = [];
-    let score = 0;
-    let fireRate = 200;
-    let canFire = true;
-    let hitCount = 0;
+  // Game variables
+  const carWidth = 60;
+  const carHeight = 30;
+  let carX = (canvas.width - carWidth) / 2;
+  const carY = canvas.height - carHeight - 10;
 
-    function drawPlayer() {
-      ctx.fillStyle = player.color;
-      ctx.fillRect(player.x - player.width/2, player.y - player.height/2, player.width, player.height);
-      // Draw nozzle
-      ctx.fillStyle = "red";
-      ctx.fillRect(player.x - 5, player.y - player.height / 2 - 10, 10, 10);
-    }
+  let bullets = [];
+  let obstacles = [];
+  let score = 0;
+  let timeLeft = 60;
+  let gameOver = false;
 
-    function drawBullet(bullet) {
-      ctx.fillStyle = bullet.color;
-      ctx.fillRect(bullet.x - 2, bullet.y, 4, 10);
-    }
+  // Sounds
+  const shootSound = new Audio('https://actions.google.com/sounds/v1/impacts/wood_plank_flicks.ogg');
+  const hitSound = new Audio('https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg');
 
-    function drawObstacle(obstacle) {
-      ctx.fillStyle = obstacle.color;
-      ctx.fillRect(obstacle.x, obstacle.y, obstacle.size, obstacle.size);
-    }
+  // Touch controls variables
+  let movingCar = false;
+  let moveStartX = 0;
+  let carStartX = 0;
 
-    function drawExplosion(x, y) {
-      ctx.fillStyle = "orange";
+  // Update scoreboard display
+  function updateScoreboard() {
+    document.getElementById('score').textContent = score;
+    document.getElementById('time').textContent = timeLeft;
+  }
+
+  // Create new obstacle
+  function spawnObstacle() {
+    const size = 30 + Math.random() * 20;
+    const x = Math.random() * (canvas.width - size);
+    const speed = 2 + Math.random() * 2;
+    obstacles.push({ x, y: -size, size, speed });
+  }
+
+  // Shoot bullet
+  function shoot() {
+    bullets.push({ x: carX + carWidth / 2 - 3, y: carY, width: 6, height: 12, speed: 8 });
+    shootSound.currentTime = 0;
+    shootSound.play();
+  }
+
+  // Draw car
+  function drawCar() {
+    ctx.fillStyle = '#0f0';
+    ctx.fillRect(carX, carY, carWidth, carHeight);
+    // Simple wheels
+    ctx.fillStyle = '#060';
+    ctx.beginPath();
+    ctx.arc(carX + 10, carY + carHeight, 8, 0, Math.PI * 2);
+    ctx.arc(carX + carWidth - 10, carY + carHeight, 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Draw obstacles
+  function drawObstacles() {
+    ctx.fillStyle = '#f00';
+    obstacles.forEach(o => {
       ctx.beginPath();
-      ctx.arc(x, y, 10, 0, Math.PI * 2);
+      ctx.arc(o.x + o.size / 2, o.y + o.size / 2, o.size / 2, 0, Math.PI * 2);
       ctx.fill();
-    }
+    });
+  }
 
-    function updateBullets() {
-      bullets.forEach(bullet => bullet.y -= bullet.speed);
-      bullets = bullets.filter(b => b.y > 0);
-    }
+  // Draw bullets
+  function drawBullets() {
+    ctx.fillStyle = '#ff0';
+    bullets.forEach(b => {
+      ctx.fillRect(b.x, b.y, b.width, b.height);
+    });
+  }
 
-    function updateObstacles() {
-      obstacles.forEach(o => o.y += o.speed);
-      obstacles = obstacles.filter(o => o.y < height);
-    }
+  // Move obstacles
+  function updateObstacles() {
+    obstacles.forEach(o => {
+      o.y += o.speed;
+    });
+    // Remove obstacles that moved off screen
+    obstacles = obstacles.filter(o => o.y < canvas.height + o.size);
+  }
 
-    function detectCollisions() {
-      for (let i = bullets.length - 1; i >= 0; i--) {
-        for (let j = obstacles.length - 1; j >= 0; j--) {
-          const b = bullets[i];
-          const o = obstacles[j];
-          if (
-            b.x > o.x && b.x < o.x + o.size &&
-            b.y > o.y && b.y < o.y + o.size
-          ) {
-            drawExplosion(o.x + o.size/2, o.y + o.size/2);
-            bullets.splice(i, 1);
-            obstacles.splice(j, 1);
-            score++;
-            hitCount++;
-            document.getElementById("score").innerText = score;
-            return;
-          }
+  // Move bullets
+  function updateBullets() {
+    bullets.forEach(b => {
+      b.y -= b.speed;
+    });
+    bullets = bullets.filter(b => b.y + b.height > 0);
+  }
+
+  // Check collisions between bullets and obstacles
+  function checkCollisions() {
+    for (let i = obstacles.length - 1; i >= 0; i--) {
+      const o = obstacles[i];
+      for (let j = bullets.length - 1; j >= 0; j--) {
+        const b = bullets[j];
+        // Simple circle-rectangle collision check
+        const distX = Math.abs((b.x + b.width / 2) - (o.x + o.size / 2));
+        const distY = Math.abs((b.y + b.height / 2) - (o.y + o.size / 2));
+
+        if (distX <= (o.size / 2 + b.width / 2) && distY <= (o.size / 2 + b.height / 2)) {
+          // Collision detected
+          obstacles.splice(i, 1);
+          bullets.splice(j, 1);
+          score++;
+          hitSound.currentTime = 0;
+          hitSound.play();
+          break;
         }
       }
     }
+  }
 
-    function spawnObstacle() {
-      const size = 30;
-      const x = Math.random() * (width - size);
-      const speed = 2 + Math.random() * 2;
-      const colors = ["red", "blue", "green", "yellow", "purple"];
-      obstacles.push({
-        x, y: -size, size, speed, color: colors[Math.floor(Math.random()*colors.length)]
-      });
+  // Game loop
+  function gameLoop() {
+    if (gameOver) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    drawCar();
+    drawObstacles();
+    drawBullets();
+
+    updateObstacles();
+    updateBullets();
+    checkCollisions();
+
+    updateScoreboard();
+
+    requestAnimationFrame(gameLoop);
+  }
+
+  // Timer countdown
+  const timerInterval = setInterval(() => {
+    if (timeLeft > 0) {
+      timeLeft--;
+      updateScoreboard();
+    } else {
+      gameOver = true;
+      clearInterval(timerInterval);
+      alert(`Game Over! Your score: ${score}`);
     }
+  }, 1000);
 
-    function fireBullet() {
-      if (canFire) {
-        bullets.push({ x: player.x, y: player.y - 30, speed: 8, color: "white" });
-        if (hitCount >= 5) {
-          bullets.push({ x: player.x - 10, y: player.y - 30, speed: 8, color: "white" });
-        }
-        if (hitCount >= 10) {
-          bullets.push({ x: player.x + 10, y: player.y - 30, speed: 8, color: "white" });
-        }
-        canFire = false;
-        setTimeout(() => { canFire = true; }, fireRate);
-      }
+  // Spawn obstacles every 700ms
+  const obstacleInterval = setInterval(() => {
+    if (!gameOver) spawnObstacle();
+    else clearInterval(obstacleInterval);
+  }, 700);
+
+  // Touch controls handlers
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const touchX = touch.clientX - rect.left;
+    const touchY = touch.clientY - rect.top;
+
+    // Bottom 20% of screen area for car movement
+    if (touchY > canvas.height * 0.8) {
+      movingCar = true;
+      moveStartX = touchX;
+      carStartX = carX;
+    } else {
+      shoot();
     }
+  }, { passive: false });
 
-    function gameLoop() {
-      ctx.clearRect(0, 0, width, height);
-      drawPlayer();
-      updateBullets();
-      updateObstacles();
-      detectCollisions();
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (!movingCar) return;
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    const touchX = touch.clientX - rect.left;
 
-      bullets.forEach(drawBullet);
-      obstacles.forEach(drawObstacle);
+    let dx = touchX - moveStartX;
+    carX = carStartX + dx;
+    if (carX < 0) carX = 0;
+    if (carX > canvas.width - carWidth) carX = canvas.width - carWidth;
+  }, { passive: false });
 
-      requestAnimationFrame(gameLoop);
+  canvas.addEventListener('touchend', e => {
+    movingCar = false;
+  });
+
+  // Also add mouse support for desktop testing
+  let mouseDown = false;
+  canvas.addEventListener('mousedown', e => {
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    if (mouseY > canvas.height * 0.8) {
+      mouseDown = true;
+      moveStartX = mouseX;
+      carStartX = carX;
+    } else {
+      shoot();
     }
+  });
 
-    setInterval(spawnObstacle, 500);
-    setInterval(fireBullet, 150);
+  canvas.addEventListener('mousemove', e => {
+    if (!mouseDown) return;
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
 
-    let isMoving = false;
-    let touchStartX = 0;
+    let dx = mouseX - moveStartX;
+    carX = carStartX + dx;
+    if (carX < 0) carX = 0;
+    if (carX > canvas.width - carWidth) carX = canvas.width - carWidth;
+  });
 
-    canvas.addEventListener("touchstart", e => {
-      const touch = e.touches[0];
-      if (touch.clientY > height - 150) {
-        isMoving = true;
-        touchStartX = touch.clientX;
-      }
-    });
+  canvas.addEventListener('mouseup', e => {
+    mouseDown = false;
+  });
 
-    canvas.addEventListener("touchmove", e => {
-      if (!isMoving) return;
-      const touch = e.touches[0];
-      const dx = touch.clientX - touchStartX;
-      player.x += dx;
-      if (player.x < player.width/2) player.x = player.width/2;
-      if (player.x > width - player.width/2) player.x = width - player.width/2;
-      touchStartX = touch.clientX;
-    });
+  gameLoop();
+})();
+</script>
 
-    canvas.addEventListener("touchend", e => {
-      isMoving = false;
-    });
-
-    // Shooting anywhere else
-    canvas.addEventListener("touchstart", e => {
-      const touch = e.touches[0];
-      if (touch.clientY < height - 150) {
-        fireBullet();
-      }
-    });
-
-    window.addEventListener("resize", () => {
-      width = window.innerWidth;
-      height = window.innerHeight;
-      canvas.width = width;
-      canvas.height = height;
-    });
-
-    gameLoop();
-  </script>
 </body>
 </html>
