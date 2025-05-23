@@ -22,7 +22,6 @@
       font-size:16px;
     }
     canvas { position:absolute; top:80px; left:0; touch-action:none; }
-    /* Start & End overlays */
     .overlay {
       position:absolute; top:80px; left:0;
       width:100%; height:calc(100% - 80px);
@@ -61,7 +60,7 @@
   </div>
 
 <script>
-(()=>{  
+(() => {
   // ---- SETUP & RESIZE ----
   const canvas = document.getElementById('gameCanvas'),
         ctx    = canvas.getContext('2d'),
@@ -75,289 +74,334 @@
 
   // ---- OVERLAYS & STATE ----
   let gameState = 'start'; // start|playing|paused|ended
-  const startOv = document.getElementById('startOverlay'),
-        endOv   = document.getElementById('endOverlay'),
-        startBtn= document.getElementById('startBtn'),
-        pauseBtn= document.getElementById('pauseBtn'),
-        restartBtn  = document.getElementById('restartBtn'),
+  const startOv       = document.getElementById('startOverlay'),
+        endOv         = document.getElementById('endOverlay'),
+        startBtn      = document.getElementById('startBtn'),
+        pauseBtn      = document.getElementById('pauseBtn'),
+        restartBtn    = document.getElementById('restartBtn'),
         endRestartBtn = document.getElementById('endRestartBtn'),
-        endMsg  = document.getElementById('endMsg');
-  function showOverlay(id){ id.style.display='flex'; }
-  function hideOverlay(id){ id.style.display='none'; }
-  startBtn.onclick = ()=>{
+        endMsg        = document.getElementById('endMsg');
+  function showOverlay(ov){ ov.style.display = 'flex'; }
+  function hideOverlay(ov){ ov.style.display = 'none'; }
+
+  startBtn.onclick = () => {
     hideOverlay(startOv);
-    gameState='playing';
+    gameState = 'playing';
+    requestAnimationFrame(loop);
   };
-  pauseBtn.onclick = ()=>{
-    if(gameState==='playing'){ gameState='paused'; pauseBtn.textContent='Resume'; }
-    else if(gameState==='paused'){ gameState='playing'; pauseBtn.textContent='Pause'; requestAnimationFrame(loop); }
+
+  pauseBtn.onclick = () => {
+    if (gameState === 'playing') {
+      gameState = 'paused';
+      pauseBtn.textContent = 'Resume';
+    } else if (gameState === 'paused') {
+      gameState = 'playing';
+      pauseBtn.textContent = 'Pause';
+      requestAnimationFrame(loop);
+    }
   };
-  restartBtn.onclick = ()=>resetAll();
-  endRestartBtn.onclick = ()=>{ resetAll(); hideOverlay(endOv); gameState='playing'; };
+
+  restartBtn.onclick = () => resetAll();
+
+  endRestartBtn.onclick = () => {
+    resetAll();
+    hideOverlay(endOv);
+    gameState = 'playing';
+    requestAnimationFrame(loop);
+  };
 
   // ---- STARFIELD BACKGROUND ----
   const stars = [];
-  for(let i=0;i<100;i++){
-    stars.push({ x:Math.random()*window.innerWidth,
-                 y:Math.random()*(window.innerHeight-HEADER),
-                 r:Math.random()*1.5+0.5,
-                 alpha:Math.random()*0.5+0.2,
-                 d:Math.random()*0.02+0.003 });
-  }
-  function drawStars(){
-    ctx.fillStyle='#000'; ctx.fillRect(0,0,canvas.width,canvas.height);
-    stars.forEach(s=>{
-      ctx.globalAlpha=s.alpha;
-      ctx.fillStyle='#fff';
-      ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill();
-      s.alpha+=s.d;
-      if(s.alpha<=0.2||s.alpha>=0.8) s.d*=-1;
+  for (let i = 0; i < 100; i++) {
+    stars.push({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * (window.innerHeight - HEADER),
+      r: Math.random() * 1.5 + 0.5,
+      alpha: Math.random() * 0.5 + 0.2,
+      d: Math.random() * 0.02 + 0.003
     });
-    ctx.globalAlpha=1;
+  }
+  function drawStars() {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    stars.forEach(s => {
+      ctx.globalAlpha = s.alpha;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+      s.alpha += s.d;
+      if (s.alpha <= 0.2 || s.alpha >= 0.8) s.d *= -1;
+    });
+    ctx.globalAlpha = 1;
   }
 
   // ---- GAME STATE ----
   const tank = { w:140, h:70, x:0, y:0, speed:12 };
-  tank.x=(window.innerWidth-tank.w)/2;
-  let bullets=[], obstacles=[], particles=[], boss=null;
-  let score=0, missed=0, bossMissed=0, level=1,
-      firePower=1, shotsFired=0, timeLeft=30,
-      baseObstacles=200, maxMissed=10, obstacleSpeed=2;
+  tank.x = (window.innerWidth - tank.w) / 2;
+  let bullets    = [],
+      obstacles  = [],
+      particles  = [],
+      boss       = null;
+
+  let score       = 0,
+      missed      = 0,
+      bossMissed  = 0,
+      level       = 1,
+      firePower   = 1,
+      shotsFired  = 0,
+      timeLeft    = 30,
+      baseObstacles = 200,
+      maxMissed   = 10,
+      obstacleSpeed = 2;
 
   // ---- INPUT ----
-  const keys={};
-  document.addEventListener('keydown',e=>{
-    if(['ArrowLeft','ArrowRight','a','d'].includes(e.key)){
-      keys[e.key]=true; e.preventDefault();
+  const keys = {};
+  document.addEventListener('keydown', e => {
+    if (['ArrowLeft','ArrowRight','a','d'].includes(e.key)) {
+      keys[e.key] = true;
+      e.preventDefault();
     }
   });
-  document.addEventListener('keyup',e=>{
-    if(['ArrowLeft','ArrowRight','a','d'].includes(e.key)){
-      keys[e.key]=false; e.preventDefault();
+  document.addEventListener('keyup', e => {
+    if (['ArrowLeft','ArrowRight','a','d'].includes(e.key)) {
+      keys[e.key] = false;
+      e.preventDefault();
     }
   });
-  let dragging=false;
-  canvas.addEventListener('pointerdown',e=>{ dragging=true; updateTank(e); });
-  document.addEventListener('pointerup',()=>dragging=false);
-  canvas.addEventListener('pointermove',e=>{ if(dragging) updateTank(e); });
-  function updateTank(e){
-    const rect=canvas.getBoundingClientRect(),
-          x=e.clientX-rect.left;
-    tank.x=Math.max(0,Math.min(canvas.width-tank.w, x-tank.w/2));
+  let dragging = false;
+  canvas.addEventListener('pointerdown', e => { dragging = true; updateTank(e); });
+  document.addEventListener('pointerup', () => dragging = false);
+  canvas.addEventListener('pointermove', e => { if (dragging) updateTank(e); });
+  function updateTank(e) {
+    const rect = canvas.getBoundingClientRect(),
+          x = e.clientX - rect.left;
+    tank.x = Math.max(0, Math.min(canvas.width - tank.w, x - tank.w/2));
   }
 
   // ---- DRAW HELPERS ----
-  function drawTank(){
-    ctx.fillStyle='lime';
-    ctx.fillRect(tank.x,tank.y,tank.w,tank.h);
+  function drawTank() {
+    ctx.fillStyle = 'lime';
+    ctx.fillRect(tank.x, tank.y, tank.w, tank.h);
   }
-  function drawBullets(){
-    ctx.fillStyle='yellow';
-    bullets.forEach(b=>{
-      ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,Math.PI*2); ctx.fill();
+  function drawBullets() {
+    ctx.fillStyle = 'yellow';
+    bullets.forEach(b => {
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2); ctx.fill();
     });
   }
-  function drawObstacles(){
-    obstacles.forEach(o=>{
-      ctx.fillStyle=o.color;
-      ctx.beginPath(); ctx.arc(o.x,o.y,o.r,0,Math.PI*2); ctx.fill();
+  function drawObstacles() {
+    obstacles.forEach(o => {
+      ctx.fillStyle = o.color;
+      ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI*2); ctx.fill();
     });
   }
-  function drawBoss(){
-    if(!boss) return;
-    // random jitter movement
-    boss.x += (Math.random()*2-1)*2;
-    boss.x=Math.max(boss.w/2,Math.min(canvas.width-boss.w/2,boss.x));
-    // tank shape
-    ctx.fillStyle='orange';
-    ctx.fillRect(boss.x-boss.w/2,boss.y-boss.h/2,boss.w,boss.h);
-    ctx.fillRect(boss.x-10,boss.y-boss.h/2-20,20,20);
+  function drawBoss() {
+    if (!boss) return;
+    // Random slow jitter
+    boss.x += (Math.random()*2 - 1) * 2;
+    boss.x = Math.max(boss.w/2, Math.min(canvas.width - boss.w/2, boss.x));
+    // Body
+    ctx.fillStyle = 'orange';
+    ctx.fillRect(boss.x - boss.w/2, boss.y - boss.h/2, boss.w, boss.h);
+    // Turret
+    ctx.fillRect(boss.x - 10, boss.y - boss.h/2 - 20, 20, 20);
   }
-  function drawParticles(){
-    particles.forEach((p,i)=>{
-      ctx.globalAlpha=p.life/p.maxLife; ctx.fillStyle=p.color;
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
-      ctx.globalAlpha=1;
-      p.x+=p.vx; p.y+=p.vy; p.life--;
-      if(p.life<=0) particles.splice(i,1);
+  function drawParticles() {
+    particles.forEach((p,i) => {
+      ctx.globalAlpha = p.life / p.maxLife;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      p.x += p.vx; p.y += p.vy; p.life--;
+      if (p.life <= 0) particles.splice(i,1);
     });
   }
-  function updateScoreboard(){
-    document.getElementById('score').textContent=score;
-    document.getElementById('level').textContent=level;
-    document.getElementById('time').textContent=timeLeft;
-    document.getElementById('missed').textContent=missed;
-    document.getElementById('bossMissed').textContent=bossMissed;
+  function updateScoreboard() {
+    document.getElementById('score').textContent      = score;
+    document.getElementById('level').textContent      = level;
+    document.getElementById('time').textContent       = timeLeft;
+    document.getElementById('missed').textContent     = missed;
+    document.getElementById('bossMissed').textContent = bossMissed;
   }
 
   // ---- CORE LOGIC ----
-  function moveTank(){
-    if(keys['ArrowLeft']||keys['a']) tank.x-=tank.speed;
-    if(keys['ArrowRight']||keys['d']) tank.x+=tank.speed;
-    tank.x=Math.max(0,Math.min(canvas.width-tank.w,tank.x));
+  function moveTank() {
+    if (keys['ArrowLeft']||keys['a'])   tank.x -= tank.speed;
+    if (keys['ArrowRight']||keys['d'])  tank.x += tank.speed;
+    tank.x = Math.max(0, Math.min(canvas.width - tank.w, tank.x));
   }
-
-  function fireBullet(){
-    if(gameState!=='playing') return;
+  function fireBullet() {
+    if (gameState !== 'playing') return;
     shotsFired++;
-    if(shotsFired%10===0 && firePower<3) firePower++;
-    for(let i=0;i<firePower;i++){
-      const off=(i-(firePower-1)/2)*22;
-      bullets.push({ x:tank.x+tank.w/2+off, y:tank.y, r:10, speed:14 });
+    if (shotsFired % 10 === 0 && firePower < 3) firePower++;
+    for (let i = 0; i < firePower; i++) {
+      const off = (i - (firePower-1)/2) * 22;
+      bullets.push({ x: tank.x + tank.w/2 + off, y: tank.y, r:10, speed:14 });
     }
   }
-
-  function updateBullets(){
-    bullets=bullets.filter(b=>{
-      b.y-=b.speed;
-      return b.y+b.r>0;
+  function updateBullets() {
+    bullets = bullets.filter(b => {
+      b.y -= b.speed;
+      return b.y + b.r > 0;
     });
   }
-
-  function spawnObstacle(){
-    if(level===3&&boss) return;
-    const color=Math.random()<0.1?'cyan':'red';
-    const baseR=30*0.75*Math.pow(0.85,level-1);
+  function spawnObstacle() {
+    if (level === 3 && boss) return;
+    const color = Math.random() < 0.1 ? 'cyan' : 'red';
+    const baseR = 30 * 0.75 * Math.pow(0.85, level-1);
     obstacles.push({
-      x:Math.random()*(canvas.width-60)+30,
-      y:-baseR*1.5,
-      r:baseR, color, speed:obstacleSpeed
+      x: Math.random()*(canvas.width-60)+30,
+      y: -baseR*1.5,
+      r: baseR,
+      color,
+      speed: obstacleSpeed
     });
   }
-
-  function updateObstacles(){
-    obstacles=obstacles.filter(o=>{
-      o.y+=o.speed;
+  function updateObstacles() {
+    obstacles = obstacles.filter(o => {
+      o.y += o.speed;
       // tank collision
-      if(o.y+o.r>=tank.y && o.x>tank.x && o.x<tank.x+tank.w){
-        spawnImpact(tank.x+tank.w/2,tank.y+tank.h/2,'orange',24);
-        resetLevel(false);
+      if (o.y + o.r >= tank.y && o.x > tank.x && o.x < tank.x + tank.w) {
+        spawnImpact(tank.x + tank.w/2, tank.y + tank.h/2, 'orange', 24);
+        resetAll(false);
         return false;
       }
-      if(o.y-o.r>canvas.height){
+      if (o.y - o.r > canvas.height) {
         missed++;
         return false;
       }
       return true;
     });
   }
-
-  function detectCollisions(){
-    for(let bi=bullets.length-1;bi>=0;bi--){
-      const b=bullets[bi];
+  function detectCollisions() {
+    for (let bi = bullets.length-1; bi >= 0; bi--) {
+      const b = bullets[bi];
       // boss hit
-      if(boss && Math.hypot(b.x-boss.x,b.y-boss.y)<b.r+boss.r){
-        bullets.splice(bi,1); boss.hp--;
-        spawnImpact(boss.x,boss.y,'white',20);
+      if (boss && Math.hypot(b.x-boss.x,b.y-boss.y) < b.r + boss.r) {
+        bullets.splice(bi,1);
+        boss.hp--;
+        spawnImpact(boss.x, boss.y, 'white', 20);
         continue;
       }
       // normal
-      for(let oi=obstacles.length-1;oi>=0;oi--){
-        const o=obstacles[oi];
-        if(Math.hypot(b.x-o.x,b.y-o.y)<b.r+o.r){
-          bullets.splice(bi,1); obstacles.splice(oi,1);
-          spawnImpact(o.x,o.y,o.color,18);
-          if(o.color==='cyan'&&firePower<3) firePower++;
-          score++; break;
+      for (let oi = obstacles.length-1; oi >= 0; oi--) {
+        const o = obstacles[oi];
+        if (Math.hypot(b.x-o.x, b.y-o.y) < b.r + o.r) {
+          bullets.splice(bi,1);
+          obstacles.splice(oi,1);
+          spawnImpact(o.x, o.y, o.color, 18);
+          if (o.color === 'cyan' && firePower < 3) firePower++;
+          score++;
+          break;
         }
       }
     }
   }
-
-  function spawnImpact(x,y,color,maxSize){
-    for(let i=0;i<20;i++){
-      const ang=Math.random()*Math.PI*2;
+  function spawnImpact(x,y,color,maxSize) {
+    for (let i = 0; i < 20; i++) {
+      const ang = Math.random()*Math.PI*2;
       particles.push({
-        x,y,
-        vx:Math.cos(ang)*(3+Math.random()*4),
-        vy:Math.sin(ang)*(3+Math.random()*4),
-        size:Math.random()*maxSize/4+2,
-        color, life:20+Math.random()*15, maxLife:20
+        x, y,
+        vx: Math.cos(ang)*(3+Math.random()*4),
+        vy: Math.sin(ang)*(3+Math.random()*4),
+        size: Math.random()*maxSize/4+2,
+        color,
+        life: 20+Math.random()*15,
+        maxLife: 20
       });
     }
   }
 
   // ---- BOSS LOGIC ----
-  function ensureBoss(){
-    if(level===3&&!boss){
-      boss={ x:canvas.width/2, y:100, w:160, h:80, r:40,
-             speedX:0, hp:200, fireTimer:0 };
+  function ensureBoss() {
+    if (level === 3 && !boss) {
+      boss = { x:canvas.width/2, y:100, w:160, h:80, r:40,
+               speedX:0, hp:200, fireTimer:0 };
     }
   }
-  function updateBoss(){
-    if(!boss) return;
-    // boss fires spread faster
-    if(++boss.fireTimer>30){
-      boss.fireTimer=0;
-      [-40,-20,0,20,40].forEach(off=>{
+  function updateBoss() {
+    if (!boss) return;
+    if (++boss.fireTimer > 30) {
+      boss.fireTimer = 0;
+      [-40,-20,0,20,40].forEach(off => {
         obstacles.push({
-          x:boss.x+off,y:boss.y+boss.h/2,
-          r:12,color:'magenta',speed:10,isBossShot:true
+          x: boss.x+off,
+          y: boss.y + boss.h/2,
+          r:12, color:'magenta', speed:10, isBossShot:true
         });
       });
     }
     drawBoss();
-    // boss shot missed?
-    obstacles.forEach((o,i)=>{
-      if(o.isBossShot && o.y - o.r > canvas.height){
+    obstacles.forEach((o,i) => {
+      if (o.isBossShot && o.y - o.r > canvas.height) {
         bossMissed++;
-        spawnImpact(o.x,canvas.height-10,'magenta',16);
+        spawnImpact(o.x, canvas.height-10, 'magenta', 16);
         obstacles.splice(i,1);
       }
     });
-    if(bossMissed>=29){
-      gameOver('You were overwhelmed by boss fire!');
+    if (bossMissed >= 29) {
+      endMsg.textContent = 'You were overwhelmed by boss fire!';
+      showOverlay(endOv);
+      gameState = 'ended';
     }
-    if(boss.hp<=0){
-      boss=null; level=4; resetLevel(true);
+    if (boss.hp <= 0) {
+      boss = null;
+      level = 4;
+      resetAll(true);
     }
   }
 
-  function resetLevel(next){
+  // ---- RESET & RESTART ----
+  function resetAll(nextLevel=true) {
     bullets=[]; obstacles=[]; particles=[];
     shotsFired=0; firePower=1; timeLeft=30; missed=0; bossMissed=0;
-    if(next){
-      baseObstacles=Math.floor(baseObstacles*1.2);
-      obstacleSpeed+=0.5;
+    if (nextLevel) {
+      baseObstacles = Math.floor(baseObstacles * 1.2);
+      obstacleSpeed += 0.5;
     }
-  }
-
-  function gameOver(msg){
-    gameState='ended';
-    endMsg.textContent=msg;
-    showOverlay(endOv);
+    updateScoreboard();
   }
 
   // ---- MAIN LOOP ----
-  function loop(){
-    if(gameState!=='playing') return;
+  function loop() {
+    if (gameState !== 'playing') return;
     moveTank(); updateBullets(); updateObstacles(); detectCollisions();
     ensureBoss();
 
     drawStars(); drawTank(); drawBullets(); drawObstacles();
     updateBoss(); drawParticles(); updateScoreboard();
 
-    if(missed>=maxMissed){
-      gameOver('Game Over! You missed too many.');
+    if (missed >= maxMissed) {
+      endMsg.textContent = 'Game Over! You missed too many.';
+      showOverlay(endOv);
+      gameState = 'ended';
       return;
     }
+
     requestAnimationFrame(loop);
   }
 
   // ---- TIMERS ----
-  setInterval(fireBullet,300);
-  setInterval(()=>{
-    if(gameState!=='playing') return;
-    if(timeLeft>0) timeLeft--;
-    else { level++; resetLevel(true); }
-  },1000);
-  setInterval(()=>{
-    if(gameState==='playing' && obstacles.length<baseObstacles) spawnObstacle();
-  },300);
+  setInterval(fireBullet, 300);
+  setInterval(() => {
+    if (gameState === 'playing') {
+      if (timeLeft > 0) timeLeft--;
+      else { level++; resetAll(true); }
+    }
+  }, 1000);
+  setInterval(() => {
+    if (gameState === 'playing' && obstacles.length < baseObstacles) {
+      spawnObstacle();
+    }
+  }, 300);
 
-  // ---- START ----
-  resize(); showOverlay(startOv);
-})();  
+  // ---- STARTUP ----
+  resize();
+  showOverlay(startOv);
+})();
 </script>
 </body>
 </html>
