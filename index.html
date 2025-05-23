@@ -17,6 +17,7 @@
     canvas {
       position: absolute; top: 0; left: 200px;
       background: #000;
+      touch-action: none; /* prevent default pan/zoom */
     }
   </style>
 </head>
@@ -31,11 +32,10 @@
   <canvas id="gameCanvas"></canvas>
 
   <script>
+    // --- SETUP & RESIZE ---
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const SIDEBAR = 200;
-
-    // handle resize
     function resize() {
       canvas.width = window.innerWidth - SIDEBAR;
       canvas.height = window.innerHeight;
@@ -43,15 +43,15 @@
     }
     window.addEventListener('resize', resize);
 
-    // GAME STATE
+    // --- GAME STATE ---
     const tank = { w: 140, h: 70, x: 0, y: 0, speed: 12 };
     tank.x = (window.innerWidth - SIDEBAR - tank.w) / 2;
     let bullets = [], obstacles = [];
-    let score = 0, missed = 0, level = 1;
-    let firePower = 1, shotsFired = 0;
-    let timeLeft = 30, baseObstacles = 100, maxMissed = 10, obstacleSpeed = 2;
+    let score=0, missed=0, level=1;
+    let firePower=1, shotsFired=0;
+    let timeLeft=30, baseObstacles=100, maxMissed=10, obstacleSpeed=2;
 
-    // INPUT
+    // --- INPUT TRACKING ---
     const keys = {};
     document.addEventListener('keydown', e => {
       if (['ArrowLeft','ArrowRight','a','d'].includes(e.key)) {
@@ -65,8 +65,17 @@
         e.preventDefault();
       }
     });
+    // Touch: slide finger to move
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const t = e.touches[0];
+      let x = t.clientX - rect.left;
+      // center tank on finger
+      tank.x = Math.max(0, Math.min(canvas.width - tank.w, x - tank.w/2));
+    });
 
-    // DRAW HELPERS
+    // --- DRAW HELPERS ---
     function drawTank() {
       ctx.fillStyle = 'lime';
       ctx.fillRect(tank.x, tank.y, tank.w, tank.h);
@@ -94,48 +103,54 @@
       document.getElementById('missed').textContent = missed;
     }
 
-    // GAME LOGIC
+    // --- GAME LOGIC ---
     function moveTank() {
-      if (keys['ArrowLeft'] || keys['a']) tank.x -= tank.speed;
-      if (keys['ArrowRight']|| keys['d']) tank.x += tank.speed;
+      if (keys['ArrowLeft']||keys['a']) tank.x -= tank.speed;
+      if (keys['ArrowRight']||keys['d']) tank.x += tank.speed;
       tank.x = Math.max(0, Math.min(canvas.width - tank.w, tank.x));
     }
     function fireBullet() {
       shotsFired++;
       if (shotsFired % 10 === 0) firePower++;
-      for (let i=0; i<firePower; i++) {
-        const offset = (i - (firePower-1)/2) * 22;
-        bullets.push({ x: tank.x + tank.w/2 + offset, y: tank.y, r: 10, speed: 14 });
+      for (let i=0; i<firePower; i++){
+        const offset = (i - (firePower-1)/2)*22;
+        bullets.push({ 
+          x: tank.x + tank.w/2 + offset, 
+          y: tank.y, r:10, speed:14 
+        });
       }
     }
     function updateBullets() {
-      bullets = bullets.filter(b => {
+      bullets = bullets.filter(b=>{
         b.y -= b.speed;
         return b.y + b.r > 0;
       });
     }
     function spawnObstacle() {
-      const color = Math.random() < 0.1 ? 'cyan' : 'red';
+      const color = Math.random()<0.1 ? 'cyan' : 'red';
       obstacles.push({
         x: Math.random()*(canvas.width-60)+30,
-        y: -50, r: 30, color, speed: obstacleSpeed
+        y: -50, r:30, color, speed:obstacleSpeed
       });
     }
     function updateObstacles() {
-      obstacles = obstacles.filter(o => {
+      obstacles = obstacles.filter(o=>{
         o.y += o.speed;
-        if (o.y - o.r > canvas.height) { missed++; return false; }
+        if (o.y - o.r > canvas.height){
+          missed++; 
+          return false;
+        }
         return true;
       });
     }
-    function detectCollisions() {
-      for (let bi=bullets.length-1; bi>=0; bi--) {
-        for (let oi=obstacles.length-1; oi>=0; oi--) {
+    function detectCollisions(){
+      for(let bi=bullets.length-1; bi>=0; bi--){
+        for(let oi=obstacles.length-1; oi>=0; oi--){
           const b=bullets[bi], o=obstacles[oi];
-          if (Math.hypot(b.x-o.x, b.y-o.y) < b.r+o.r) {
+          if (Math.hypot(b.x-o.x,b.y-o.y) < b.r+o.r){
             bullets.splice(bi,1);
             obstacles.splice(oi,1);
-            if (o.color==='cyan') firePower++;
+            if(o.color==='cyan') firePower++;
             score++;
             break;
           }
@@ -143,8 +158,8 @@
       }
     }
 
-    // MAIN LOOP
-    function loop() {
+    // --- MAIN LOOP ---
+    function loop(){
       moveTank();
       updateBullets();
       updateObstacles();
@@ -156,32 +171,29 @@
       drawObstacles();
       updateScoreboard();
 
-      if (missed >= maxMissed) {
+      if(missed>=maxMissed){
         alert(`Game Over! Final Score: ${score}`);
         return location.reload();
       }
       requestAnimationFrame(loop);
     }
 
-    // TIMERS
-    setInterval(fireBullet, 300);
-    setInterval(() => {
-      if (timeLeft > 0) timeLeft--;
+    // --- TIMERS ---
+    setInterval(fireBullet,300);
+    setInterval(()=>{
+      if(timeLeft>0) timeLeft--;
       else {
-        level++;
-        firePower = 1;
-        shotsFired = 0;
-        timeLeft = 30;
-        maxMissed = Math.max(1, 10 - (level-1));
+        level++; firePower=1; shotsFired=0; timeLeft=30;
+        maxMissed = Math.max(1,10-(level-1));
         baseObstacles = Math.floor(baseObstacles*1.2);
         obstacleSpeed += 0.5;
       }
-    }, 1000);
-    setInterval(() => {
-      if (obstacles.length < baseObstacles) spawnObstacle();
-    }, 300);
+    },1000);
+    setInterval(()=>{
+      if(obstacles.length<baseObstacles) spawnObstacle();
+    },300);
 
-    // START UP
+    // --- START ---
     resize();
     loop();
   </script>
