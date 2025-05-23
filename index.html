@@ -4,20 +4,21 @@
   <meta charset="UTF-8">
   <title>KaKaReza Shooting Game</title>
   <style>
-    /* Full-screen canvas with fixed sidebar */
-    body { margin: 0; overflow: hidden; background: #000; }
+    /* Reset & layout */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #000; font-family: Arial, sans-serif; }
     #scoreboard {
       position: fixed; top: 0; left: 0;
       width: 200px; height: 100vh;
-      background: rgba(0,0,0,0.85); color: #0f0;
-      padding: 20px; box-sizing: border-box;
-      user-select: none; font-family: Arial, sans-serif;
+      background: rgba(0, 0, 0, 0.85);
+      color: #0f0; padding: 20px;
+      user-select: none;
     }
-    #scoreboard h3 { margin: 0 0 20px; font-size: 20px; text-align: center; }
+    #scoreboard h3 { margin-bottom: 20px; text-align: center; }
     #scoreboard p { margin: 8px 0; font-size: 18px; }
     canvas {
       position: absolute; top: 0; left: 200px;
-      background: radial-gradient(circle, #111 20%, #000);
+      background: #000;
     }
   </style>
 </head>
@@ -32,45 +33,44 @@
   <canvas id="gameCanvas"></canvas>
 
   <script>
-    // ----- SETUP -----
+    // — Setup & resize —
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    const sidebarWidth = 200;
-
+    const sidebar = 200;
     function resize() {
-      canvas.width = window.innerWidth - sidebarWidth;
+      canvas.width = window.innerWidth - sidebar;
       canvas.height = window.innerHeight;
     }
     window.addEventListener('resize', resize);
     resize();
 
-    // ----- GAME STATE -----
-    const tank = {
-      w: 120, h: 60,
-      x: (canvas.width - 120)/2,
-      y: canvas.height - 80,
-      speed: 10
-    };
+    // — Game state —
+    const tank = { w: 140, h: 70, x: 0, y: 0, speed: 12 };
+    tank.x = (canvas.width - tank.w) / 2;
+    tank.y = canvas.height - tank.h - 20;
+
     let bullets = [], obstacles = [];
     let score = 0, missed = 0, level = 1;
     let firePower = 1, shotsFired = 0;
     let timeLeft = 30, baseObstacles = 100, maxMissed = 10, obstacleSpeed = 2;
+
     const keys = {};
 
-    // ----- INPUT -----
+    // — Input handling —
     document.addEventListener('keydown', e => {
       if (['ArrowLeft','ArrowRight','a','d'].includes(e.key)) {
-        e.preventDefault(); // stop page scroll
         keys[e.key] = true;
+        e.preventDefault();
       }
     });
     document.addEventListener('keyup', e => {
       if (['ArrowLeft','ArrowRight','a','d'].includes(e.key)) {
         keys[e.key] = false;
+        e.preventDefault();
       }
     });
 
-    // ----- DRAW FUNCTIONS -----
+    // — Drawing helpers —
     function drawTank() {
       ctx.fillStyle = 'lime';
       ctx.fillRect(tank.x, tank.y, tank.w, tank.h);
@@ -98,20 +98,20 @@
       document.getElementById('missed').textContent = missed;
     }
 
-    // ----- GAME LOGIC -----
+    // — Core logic —
     function moveTank() {
       if (keys['ArrowLeft'] || keys['a']) tank.x -= tank.speed;
       if (keys['ArrowRight'] || keys['d']) tank.x += tank.speed;
-      // constrain
+      // clamp
       tank.x = Math.max(0, Math.min(canvas.width - tank.w, tank.x));
     }
 
     function fireBullet() {
       shotsFired++;
       if (shotsFired % 10 === 0) firePower++;
-      for (let i=0; i<firePower; i++) {
-        const offset = (i - (firePower-1)/2) * 20;
-        bullets.push({ x: tank.x + tank.w/2 + offset, y: tank.y, r: 10, speed: 12 });
+      for (let i = 0; i < firePower; i++) {
+        const offset = (i - (firePower-1)/2) * 22;
+        bullets.push({ x: tank.x + tank.w/2 + offset, y: tank.y, r: 10, speed: 14 });
       }
     }
 
@@ -123,9 +123,8 @@
     function spawnObstacle() {
       const color = Math.random() < 0.1 ? 'cyan' : 'red';
       obstacles.push({
-        x: Math.random()*(canvas.width-60)+30,
-        y: -40, r: 30, color,
-        speed: obstacleSpeed
+        x: Math.random()*(canvas.width - 60) + 30,
+        y: -50, r: 30, color, speed: obstacleSpeed
       });
     }
 
@@ -147,29 +146,26 @@
           if (Math.hypot(dx, dy) < b.r + o.r) {
             bullets.splice(bi,1);
             obstacles.splice(oi,1);
-            if (o.color==='cyan') firePower++;
+            if (o.color === 'cyan') firePower++;
             score++;
           }
         });
       });
     }
 
-    // ----- MAIN LOOP -----
+    // — Main loop —
     function loop() {
-      // move and update
       moveTank();
       updateBullets();
       updateObstacles();
       detectCollisions();
 
-      // draw
-      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawTank();
       drawBullets();
       drawObstacles();
       updateScoreboard();
 
-      // check game over
       if (missed >= maxMissed) {
         alert(`Game Over! Final Score: ${score}`);
         return location.reload();
@@ -177,12 +173,11 @@
       requestAnimationFrame(loop);
     }
 
-    // ----- TIMERS -----
+    // — Timers —
     setInterval(fireBullet, 300);
     setInterval(() => {
-      if (timeLeft > 0) {
-        timeLeft--;
-      } else {
+      if (timeLeft > 0) timeLeft--;
+      else {
         level++;
         firePower = 1;
         shotsFired = 0;
@@ -196,7 +191,7 @@
       if (obstacles.length < baseObstacles) spawnObstacle();
     }, 300);
 
-    // start!
+    // — Start!
     requestAnimationFrame(loop);
   </script>
 </body>
